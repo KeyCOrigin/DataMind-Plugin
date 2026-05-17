@@ -1,0 +1,21 @@
+{
+  "name": "datamind-context",
+  "version": "1.0.0",
+  "description": "DataMind RAG/GraphRAG, managed folders, Wiki, and feedback-aware structured memory for Claude Code.",
+  "author": {
+    "name": "DataMind contributors",
+    "url": "https://github.com/zwt233/DataMind"
+  },
+  "homepage": "https://github.com/zwt233/DataMind",
+  "repository": "https://github.com/zwt233/DataMind",
+  "license": "MIT",
+  "keywords": [
+    "rag",
+    "graphrag",
+    "knowledge-base",
+    "memory",
+    "claude-code"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.claude-plugin/mcp.json"
+}

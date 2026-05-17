@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "datamind-context": {
+      "command": "${userHome}/.cursor/plugins/local/datamind-context/src/run_datamind_mcp.sh",
+      "args": []
+    }
+  }
+}

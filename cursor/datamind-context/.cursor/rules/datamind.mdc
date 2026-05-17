@@ -1,0 +1,82 @@
+---
+description: Use DataMind from Cursor to refresh a local folder into a RAG/GraphRAG knowledge base, query document knowledge or graph relationships, and capture durable preferences/decisions/workflows.
+alwaysApply: false
+---
+
+# DataMind Context (Cursor Rule)
+
+This rule mirrors the DataMind plugin's SKILL.md so the Cursor Agent can auto-trigger DataMind's MCP tools when the user is talking about local knowledge bases, RAG, GraphRAG, memory, profiles, or Wikis. Cursor does not natively read SKILL.md, so this Rule is the auto-trigger fallback.
+
+## When to use DataMind
+
+Trigger DataMind when the user wants to:
+
+- Build, refresh, or query a knowledge base over a local folder (PDF/docx/xlsx/markdown).
+- Ask "what does this folder say about X" / "summarize these docs".
+- Ask multi-hop or relationship questions across documents (GraphRAG).
+- Persist a preference, decision, repeated workflow, or lesson learned so future sessions remember it.
+- Recall a previous DataMind answer, profile, or memory.
+- Check Wiki health, missing pages, or broken links.
+- Confirm, correct, or redo a recent DataMind answer (feedback loop).
+
+## Default behavior (low-friction)
+
+- Do NOT ask the user to provide a `session_id`. Leave it unset; DataMind defaults to the global session `global`.
+- Do NOT force a `profile` name. When the user gives only a folder path, call `datamind_use_folder` with `folder_path` only and DataMind auto-creates the profile.
+- After `datamind_use_folder` returns, tell the user the auto-created profile name once, but keep follow-ups simple.
+- For follow-up questions without an explicit profile, call `datamind_ask` without `profile`; DataMind reuses the last profile.
+- For normal updates, call `datamind_use_folder` without `clean` or `force_rebuild`. The simple entrypoint does manifest-based change detection and skips RAG/GraphRAG rebuilds when no index-relevant files changed.
+
+## Tool selection cheat sheet
+
+Prefer the simple tools first:
+
+1. `datamind_use_folder` — start using or refresh a folder.
+2. `datamind_ask` — answer a question. Leave `mode=auto` unless the user explicitly asks for `rag` or `graph`.
+3. `datamind_remember` — capture a durable preference / decision / repeated workflow / project convention.
+4. `datamind_save_memory` — summarize / persist / package memory or skills.
+5. `datamind_lint_wiki` — check Wiki health, broken links, orphan source pages.
+
+Use the advanced tools only when needed:
+
+- `datamind_ingest_folder` for detailed ingestion options.
+- `datamind_refresh_folder` for raw DataMind-compatible folders.
+- `datamind_rag_query` for explicit RAG-only questions.
+- `datamind_graph_query` for explicit GraphRAG-only questions.
+- `datamind_record_interaction` for structured message logs.
+- `datamind_consolidate_memory` for detailed memory packaging options.
+- `datamind_search_memory` for direct structured-memory lookup.
+- `datamind_record_feedback` when an answer receives next-turn correction, confirmation, or redo feedback.
+- `datamind_feedback_status` for feedback trace inspection.
+- `datamind_status`, `datamind_list_profiles`, `datamind_list_memories` for inspection.
+
+## Automatic memory capture
+
+Automatically call `datamind_remember` (without asking for a session) when the user expresses a durable, high-value pattern, including:
+
+- A preference about answer format, language, ordering, evidence, or verbosity.
+- A repeated correction or stable instruction, e.g. "以后都这样处理".
+- A project convention, naming rule, directory rule, data handling rule, or safety constraint.
+- A decision that should influence future DataMind operations.
+
+Do NOT auto-record secrets, API keys, passwords, tokens, temporary one-off facts, or noisy step-by-step logs. Keep each auto memory short and actionable. Include metadata like `{"kind":"auto_high_value_habit"}` when useful.
+
+## Feedback loop
+
+`datamind_ask` / `datamind_rag_query` / `datamind_graph_query` return a `feedback_trace.id`. When the user confirms, corrects, or asks to redo a DataMind answer in the next turn, call `datamind_record_feedback` with that trace ID. Negative feedback is auto-saved as a `feedback_hint` for similar future questions.
+
+## Wiki & memory locations (for reference, do not edit by hand)
+
+- Wiki: `~/.datamind-context/profiles/{profile}/wiki/`
+- Structured memory: `~/.datamind-context/memory.db`
+- Dynamic interaction logs: `~/.datamind-context/interactions/{session}/events.jsonl`
+- Generated skills: `~/.datamind-context/skills/{session}/*.md`
+- Managed source data: `~/.datamind-context/profiles/{profile}/data/`
+
+These are shared with the Codex and Claude Code versions of the plugin — switching IDEs preserves your profiles, Wikis, and memories.
+
+## Notes
+
+- Audio/video transcription is best-effort and only runs when `transcribe_media` is true.
+- Original user folders are never modified; ingestion always copies into the managed profile data dir first.
+- If structured memory is unavailable (e.g. SQLite FTS missing), DataMind transparently falls back to the Wiki + Markdown memory path.
