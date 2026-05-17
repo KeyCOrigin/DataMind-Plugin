@@ -13,10 +13,12 @@
 #
 # Files NOT synced (intentionally per-variant):
 #   src/run_datamind_mcp.sh               (Claude Code has extra venv probes)
+#   src/run_datamind_mcp.ps1              (Claude Code has extra venv probes)
 #   skills/datamind-context/SKILL.md      (uses "Codex"/"Claude Code"/"Cursor")
-#   install.sh                            (per-IDE install logic)
+#   install.sh   /   install.ps1          (per-IDE install logic)
 #   .codex-plugin/  .claude-plugin/  .cursor-plugin/
 #   .mcp.json  /  mcp.json  /  .claude-plugin/mcp.json
+#   .mcp.windows.json  /  mcp.windows.json  /  .claude-plugin/mcp.windows.json
 #   .claude-plugin/marketplace.json
 #   hooks/  scripts/bootstrap_claude.sh   (Claude Code only)
 #   .cursor/rules/datamind.mdc            (Cursor only)

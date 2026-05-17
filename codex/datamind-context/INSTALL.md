@@ -109,6 +109,32 @@ cd /path/to/DataMind
 
 然后重启 Codex，在插件入口启用 `DataMind Context`。
 
+## Windows 安装方式
+
+Windows 用户不需要 Git Bash 或 WSL，使用配套的 `install.ps1`：
+
+```powershell
+cd codex\datamind-context
+.\install.ps1
+```
+
+如果 PowerShell 默认 ExecutionPolicy 阻止脚本运行，可以用：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+支持的参数（PowerShell 风格）：
+
+| 参数 | 等价的 Bash 选项 | 作用 |
+|---|---|---|
+| `-Force` | `--force` | 覆盖已有安装 |
+| `-SkipDeps` | `--skip-deps` | 跳过 venv 和依赖安装 |
+| `-RepoRoot <path>` | `--repo-root <path>` | 指定外部 DataMind 仓库 |
+| `-PythonExe <path>` | `--python <path>` | 指定 Python 解释器 |
+
+`install.ps1` 在装的最后会**把 `.mcp.windows.json` 复制覆盖 `.mcp.json`**，让 Codex 在 Windows 上启动 MCP server 时调用 `powershell.exe -File src\run_datamind_mcp.ps1`，而不是去执行 Bash 脚本。这一步是 Windows 专属，不影响 Linux/macOS 流程。
+
 ## 验证安装
 
 在 Codex 里输入:

@@ -98,6 +98,38 @@ cd /path/to/extracted/datamind-context
 ./install.sh --repo-root /path/to/DataMind
 ```
 
+## Windows 安装方式
+
+Windows 用户不需要 Git Bash 或 WSL，使用配套的 `install.ps1`：
+
+```powershell
+cd claude-code\datamind-context
+.\install.ps1
+```
+
+如果 PowerShell 默认 ExecutionPolicy 阻止脚本运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+支持的参数：
+
+| 参数 | 等价的 Bash 选项 | 作用 |
+|---|---|---|
+| `-Force` | `--force` | 卸载已有插件并重新安装 |
+| `-SkipDeps` | `--skip-deps` | 跳过 venv 与依赖安装；交给 SessionStart 钩子懒加载 |
+| `-RepoRoot <path>` | `--repo-root <path>` | 指定外部 DataMind 仓库 |
+| `-PythonExe <path>` | `--python <path>` | 指定 Python 解释器 |
+
+`install.ps1` 会做几件 Windows 专属的事：
+
+1. 在 `vendor\datamind\.venv\Scripts\python.exe` 建 venv。
+2. **把 `.claude-plugin\mcp.windows.json` 覆盖成 `.claude-plugin\mcp.json`**，让 Claude Code 在 Windows 上调用 `powershell.exe -File ${CLAUDE_PLUGIN_ROOT}\src\run_datamind_mcp.ps1`，而不是 Bash 脚本。
+3. 调用 `claude plugin marketplace add` 和 `claude plugin install` 完成注册（与 Linux/macOS 流程相同）。
+
+注意：`claude` CLI 必须在 PATH 中。如果 PowerShell 找不到 `claude`，确认你已经按 https://docs.claude.com/claude-code 的指引装好 Claude Code，并把它加进 PATH。
+
 ## 验证安装
 
 在 Claude Code 里输入:

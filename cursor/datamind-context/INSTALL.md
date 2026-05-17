@@ -99,6 +99,37 @@ cd /path/to/extracted/datamind-context
 ./install.sh --python /usr/bin/python3
 ```
 
+## Windows 安装方式
+
+Windows 用户不需要 Git Bash 或 WSL，使用配套的 `install.ps1`：
+
+```powershell
+cd cursor\datamind-context
+.\install.ps1
+```
+
+如果 PowerShell 默认 ExecutionPolicy 阻止脚本运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+支持的参数：
+
+| 参数 | 等价的 Bash 选项 | 作用 |
+|---|---|---|
+| `-Force` | `--force` | 覆盖已有安装与同名 Cursor Rule |
+| `-SkipDeps` | `--skip-deps` | 跳过 venv 和依赖安装 |
+| `-RepoRoot <path>` | `--repo-root <path>` | 指定外部 DataMind 仓库 |
+| `-PythonExe <path>` | `--python <path>` | 指定 Python 解释器 |
+
+`install.ps1` 会做几件 Windows 专属的事：
+
+1. 把插件目录复制到 `%USERPROFILE%\.cursor\plugins\local\datamind-context\`。
+2. 在 `vendor\datamind\.venv\Scripts\python.exe` 建 venv。
+3. **把 `mcp.windows.json` 覆盖成 `mcp.json`**，让 Cursor 在 Windows 上调用 `powershell.exe -File src\run_datamind_mcp.ps1` 而不是执行 Bash 脚本。
+4. 把 `.cursor\rules\datamind.mdc` 复制到 `%USERPROFILE%\.cursor\rules\datamind.mdc`（全局 Cursor Rule，让 Agent 自动触发 `datamind_*`）。
+
 ## 启用插件
 
 1. 完整退出并重启 Cursor（不只是 reload window）。
@@ -111,7 +142,7 @@ cd /path/to/extracted/datamind-context
 
 Cursor 不会读插件目录里的 `SKILL.md`，所以本插件还提供一份等价的 Cursor Rule（`.cursor/rules/datamind.mdc`），用于让 Agent 看到"知识库 / RAG / 记忆 / 偏好"等关键词时主动调用 `datamind_*` 工具。
 
-`install.sh` 会把这份 Rule **复制到 `~/.cursor/rules/datamind.mdc`**（Cursor 全局 Rules 目录），对所有工程生效。
+`install.sh`（Linux/macOS）/ `install.ps1`（Windows）会把这份 Rule **复制到 `~/.cursor/rules/datamind.mdc`**（Cursor 全局 Rules 目录），对所有工程生效。
 
 - 如果该路径已有同名文件且内容不同，install.sh 会保留你的版本，并提示用 `--force` 覆盖。
 - 想只在某个工程启用，请改为手动把 `.cursor/rules/datamind.mdc` 复制到 `<your-project>/.cursor/rules/`。

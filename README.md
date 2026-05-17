@@ -40,6 +40,31 @@ Each `install.sh` is self-contained: it creates a Python venv under `vendor/data
 
 After install, edit `vendor/datamind/.env` (each variant has its own copy under its install location) and restart your IDE.
 
+### Windows users
+
+Windows isn't a second-class citizen. Each variant ships a PowerShell counterpart of every Bash script:
+
+```powershell
+git clone https://github.com/OpenDCAI/DataMind-Plugin.git
+cd DataMind-Plugin
+
+# Pick one:
+cd codex\datamind-context        ; .\install.ps1   # Codex
+# cd claude-code\datamind-context ; .\install.ps1   # Claude Code
+# cd cursor\datamind-context      ; .\install.ps1   # Cursor
+```
+
+`install.ps1` does three things `install.sh` doesn't on Unix:
+
+1. Creates the venv under `vendor\datamind\.venv\Scripts\python.exe` (Windows venv layout).
+2. Replaces the bundled `mcp.json` with `mcp.windows.json`, so the IDE spawns `powershell.exe -File run_datamind_mcp.ps1` instead of trying to execute the Bash launcher.
+3. Honors `-Force`, `-SkipDeps`, `-RepoRoot`, `-PythonExe` flags (PowerShell-style equivalents of the Bash `--force`, `--skip-deps`, etc.).
+
+If your PowerShell execution policy blocks the script, run it once with:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
 ## Per-IDE differences
 
 |  | Codex | Claude Code | Cursor |
