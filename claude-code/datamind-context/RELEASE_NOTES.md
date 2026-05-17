@@ -7,7 +7,7 @@ DataMind Context 1.0.0 是首个稳定版本，也是第一个独立打包给 Cl
 Claude Code 子目录的关键设计：
 
 - 通过 `claude plugin marketplace add ./` + `claude plugin install datamind-context@datamind` 一键集成。
-- 附 `SessionStart` 钩子（`scripts/bootstrap_claude.sh`）：第一次启动时按需在 `${CLAUDE_PLUGIN_DATA}/.venv` 下建 venv 并装依赖；当检测到 Codex 安装位置 `~/plugins/datamind-context/vendor/datamind/.venv` 时自动复用，不重复装。
+- 附 `SessionStart` 钩子（`scripts/bootstrap_claude.sh`）：第一次启动时按需在 `${CLAUDE_PLUGIN_DATA}/.venv` 下建 venv 并装依赖；当检测到 Codex 安装位置 `~/.codex/marketplaces/*/plugins/datamind-context/vendor/datamind/.venv` 时自动复用，不重复装。
 - `src/run_datamind_mcp.sh` 增强探测：依次尝试 `${DATAMIND_PYTHON}` → `${CLAUDE_PLUGIN_DATA}/.venv` → Codex venv → bundled venv → 系统 `python3`。
 - MCP 配置走 `${CLAUDE_PLUGIN_ROOT}` 变量解析，与 Claude Code plugin cache 机制完全兼容。
 - 与 Codex / Cursor 共享 `~/.datamind-context/` 用户数据；用户在任一 IDE 创建的 profile / Wiki / 记忆都互通。

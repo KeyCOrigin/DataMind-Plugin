@@ -35,8 +35,8 @@ cd datamind-context
 |---|---|---|
 | 清单 | `.codex-plugin/plugin.json` | `.cursor-plugin/plugin.json` |
 | MCP 配置 | `.mcp.json` | `mcp.json`（Cursor 自动从插件根目录发现）|
-| 安装目录 | `~/plugins/datamind-context/` | `~/.cursor/plugins/local/datamind-context/` |
-| Marketplace | `~/.agents/plugins/marketplace.json` | Cursor 自动发现 `~/.cursor/plugins/local/*` |
+| 安装目录 | `~/.codex/marketplaces/datamind/plugins/datamind-context/` | `~/.cursor/plugins/local/datamind-context/` |
+| Marketplace | `~/.codex/config.toml` | Cursor 自动发现 `~/.cursor/plugins/local/*` |
 | 启用位置 | Codex 插件列表 | `Settings -> Plugins -> Local Plugins` |
 | Skill | `skills/datamind-context/SKILL.md`（agentskills.io 格式）| 同左，零修改 |
 | Runtime | `vendor/datamind/` | 同左，零修改 |

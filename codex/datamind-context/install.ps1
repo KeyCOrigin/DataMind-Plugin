@@ -1,12 +1,13 @@
 # Install DataMind Context as a Codex plugin (Windows / PowerShell version).
 #
-# Mirrors install.sh on Unix:
-#   1. Validate the plugin manifest.
-#   2. Create a venv under <repo>\.venv and install requirements.txt.
-#   3. Copy this folder to %USERPROFILE%\plugins\datamind-context.
-#   4. Replace .mcp.json with .mcp.windows.json so Codex spawns the .ps1
-#      launcher instead of the .sh launcher.
-#   5. Update %USERPROFILE%\.agents\plugins\marketplace.json.
+# OpenAI Codex's plugin model on Windows is the same as on macOS/Linux:
+#   * marketplaces are directories registered in %USERPROFILE%\.codex\config.toml
+#     under [marketplaces.<name>] with `source = "<absolute path>"`.
+#   * each marketplace contains:
+#       <root>\.agents\plugins\marketplace.json   (catalogue)
+#       <root>\plugins\<plugin>\.codex-plugin\plugin.json
+#       <root>\plugins\<plugin>\...               (the plugin)
+#   * plugins are enabled via [plugins."<plugin>@<marketplace>"] enabled = true.
 #
 # Usage (PowerShell):
 #   .\install.ps1
@@ -14,23 +15,25 @@
 #   .\install.ps1 -SkipDeps
 #   .\install.ps1 -RepoRoot C:\path\to\DataMind
 #   .\install.ps1 -PythonExe C:\Python311\python.exe
+#   .\install.ps1 -MarketplaceName mycustom
 
 [CmdletBinding()]
 param(
     [string]$RepoRoot,
     [switch]$Force,
     [switch]$SkipDeps,
-    [string]$PythonExe = 'python'
+    [string]$PythonExe = 'python',
+    [string]$MarketplaceName = 'datamind'
 )
 
 $ErrorActionPreference = 'Stop'
 
 $PluginName = 'datamind-context'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$TargetParent = Join-Path $env:USERPROFILE 'plugins'
-$TargetDir = Join-Path $TargetParent $PluginName
-$MarketplaceDir = Join-Path $env:USERPROFILE '.agents\plugins'
-$MarketplacePath = Join-Path $MarketplaceDir 'marketplace.json'
+$MarketplaceRoot = Join-Path $env:USERPROFILE ".codex\marketplaces\$MarketplaceName"
+$TargetDir = Join-Path $MarketplaceRoot "plugins\$PluginName"
+$MarketplaceJson = Join-Path $MarketplaceRoot ".agents\plugins\marketplace.json"
+$CodexConfig = Join-Path $env:USERPROFILE ".codex\config.toml"
 
 function Resolve-BundledRepo($base) {
     foreach ($name in 'datamind', 'DataMind') {
@@ -42,7 +45,7 @@ function Resolve-BundledRepo($base) {
     return $null
 }
 
-# --- 1. Resolve DataMind runtime root ---
+# --- Resolve DataMind runtime root ---
 if (-not $RepoRoot) {
     $RepoRoot = Resolve-BundledRepo $ScriptDir
 }
@@ -63,8 +66,15 @@ if (-not (Test-Path (Join-Path $ScriptDir '.codex-plugin\plugin.json'))) {
     exit 1
 }
 
-# --- 2. Copy plugin to %USERPROFILE%\plugins\datamind-context ---
-New-Item -ItemType Directory -Force -Path $TargetParent, $MarketplaceDir | Out-Null
+# --- Sanity: do we have a Codex install? ---
+if (-not (Test-Path (Join-Path $env:USERPROFILE '.codex'))) {
+    Write-Warning "$($env:USERPROFILE)\.codex does not exist. Make sure OpenAI Codex desktop is installed and run at least once."
+    New-Item -ItemType Directory -Force -Path (Join-Path $env:USERPROFILE '.codex') | Out-Null
+}
+
+# --- Stage the marketplace + plugin ---
+New-Item -ItemType Directory -Force -Path (Join-Path $MarketplaceRoot '.agents\plugins') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $MarketplaceRoot 'plugins') | Out-Null
 
 if ($ScriptDir -ne $TargetDir) {
     if ((Test-Path $TargetDir) -and -not $Force) {
@@ -74,7 +84,6 @@ if ($ScriptDir -ne $TargetDir) {
     if (Test-Path $TargetDir) { Remove-Item -Recurse -Force $TargetDir }
     New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
 
-    # Copy everything except local artifacts.
     $exclusions = @('.DS_Store', '.datamind-repo-root', '__pycache__', '.pytest_cache', '.venv')
     Get-ChildItem -Path $ScriptDir -Force | Where-Object {
         $exclusions -notcontains $_.Name
@@ -90,7 +99,7 @@ if ($ScriptDir -ne $TargetDir) {
 
 Set-Content -Path (Join-Path $TargetDir '.datamind-repo-root') -Value $RepoRoot
 
-# --- 3. Activate the Windows MCP config ---
+# --- Activate Windows MCP config ---
 $WinMcp = Join-Path $TargetDir '.mcp.windows.json'
 $Mcp = Join-Path $TargetDir '.mcp.json'
 if (Test-Path $WinMcp) {
@@ -98,10 +107,10 @@ if (Test-Path $WinMcp) {
     Write-Host "Activated Windows MCP config: $Mcp"
 }
 
-# --- 4. Create venv and install Python deps ---
+# --- Bootstrap .env + venv ---
 if (-not (Test-Path (Join-Path $RepoRoot '.env')) -and (Test-Path (Join-Path $RepoRoot '.env.example'))) {
     Copy-Item -Force (Join-Path $RepoRoot '.env.example') (Join-Path $RepoRoot '.env')
-    Write-Host "Created $($RepoRoot)\.env from .env.example. Edit it with your LLM and embedding credentials."
+    Write-Host "Created $RepoRoot\.env from .env.example. Edit it with your LLM and embedding credentials."
 }
 
 if (-not $SkipDeps) {
@@ -113,57 +122,72 @@ if (-not $SkipDeps) {
     & $venvPy -m pip install --prefer-binary -r (Join-Path $RepoRoot 'requirements.txt')
 }
 
-# --- 5. Update marketplace.json ---
-$entry = [ordered]@{
-    name     = 'datamind-context'
-    source   = [ordered]@{ source = 'local'; path = './plugins/datamind-context' }
-    policy   = [ordered]@{ installation = 'AVAILABLE'; authentication = 'ON_USE' }
-    category = 'Productivity'
-}
+# --- Write marketplace.json + patch config.toml ---
+$pyScript = @"
+import json, pathlib, re, sys, datetime as dt
 
-if (Test-Path $MarketplacePath) {
-    try {
-        $payload = Get-Content -Raw -Path $MarketplacePath | ConvertFrom-Json
-    } catch {
-        Write-Error "Invalid marketplace JSON: $MarketplacePath"
-        exit 1
-    }
-} else {
-    $payload = [pscustomobject]@{
-        name      = 'local'
-        interface = [pscustomobject]@{ displayName = 'Local Plugins' }
-        plugins   = @()
-    }
-}
+mp_path = pathlib.Path(sys.argv[1])
+mname = sys.argv[2]
+mroot = sys.argv[3]
+config_path = pathlib.Path(sys.argv[4])
 
-if (-not $payload.PSObject.Properties.Match('plugins').Count) {
-    $payload | Add-Member -NotePropertyName plugins -NotePropertyValue @()
+# 1. marketplace.json
+entry = {
+    'name': 'datamind-context',
+    'source': {'source': 'local', 'path': './plugins/datamind-context'},
+    'policy': {'installation': 'AVAILABLE', 'authentication': 'ON_USE'},
+    'category': 'Productivity',
 }
+if mp_path.exists():
+    payload = json.loads(mp_path.read_text(encoding='utf-8'))
+else:
+    payload = {'name': mname, 'interface': {'displayName': 'DataMind'}, 'plugins': []}
+payload.setdefault('name', mname)
+payload.setdefault('interface', {}).setdefault('displayName', 'DataMind')
+plugins = payload.setdefault('plugins', [])
+for i, p in enumerate(plugins):
+    if isinstance(p, dict) and p.get('name') == entry['name']:
+        plugins[i] = entry; break
+else:
+    plugins.append(entry)
+mp_path.parent.mkdir(parents=True, exist_ok=True)
+mp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
-$plugins = @($payload.plugins)
-$replaced = $false
-for ($i = 0; $i -lt $plugins.Count; $i++) {
-    if ($plugins[$i].name -eq 'datamind-context') {
-        $plugins[$i] = [pscustomobject]$entry
-        $replaced = $true
-        break
-    }
-}
-if (-not $replaced) {
-    $plugins += [pscustomobject]$entry
-}
-$payload.plugins = $plugins
+# 2. config.toml
+config_path.parent.mkdir(parents=True, exist_ok=True)
+text = config_path.read_text(encoding='utf-8') if config_path.exists() else ''
+now = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+def patch(text, header, body):
+    pat = re.compile(r'(?ms)^' + re.escape(header) + r'\n(?:(?!^\[).*\n?)*')
+    block = header + '\n' + (body if body.endswith('\n') else body + '\n')
+    if pat.search(text):
+        return pat.sub(block, text, count=1)
+    if text and not text.endswith('\n'): text += '\n'
+    if text and not text.endswith('\n\n'): text += '\n'
+    return text + block
 
-$payload | ConvertTo-Json -Depth 10 | Set-Content -Path $MarketplacePath -Encoding UTF8
+mroot_toml = mroot.replace('\\', '\\\\')
+text = patch(text, f'[marketplaces.{mname}]',
+             f'last_updated = \"{now}\"\nsource_type = \"local\"\nsource = \"{mroot_toml}\"\n')
+text = patch(text, f'[plugins.\"datamind-context@{mname}\"]', 'enabled = true\n')
+config_path.write_text(text, encoding='utf-8')
+print(f'Wrote {mp_path}'); print(f'Patched {config_path}')
+"@
 
-# --- 6. Friendly summary ---
+& $PythonExe -c $pyScript $MarketplaceJson $MarketplaceName $MarketplaceRoot $CodexConfig
+
+# --- Friendly summary ---
 Write-Host ""
-Write-Host "Installed $PluginName for Codex."
-Write-Host "Plugin path:    $TargetDir"
-Write-Host "DataMind repo:  $RepoRoot"
-Write-Host "Marketplace:    $MarketplacePath"
+Write-Host "Installed $PluginName for Codex (OpenAI desktop app)."
+Write-Host "Marketplace name:    $MarketplaceName"
+Write-Host "Marketplace root:    $MarketplaceRoot"
+Write-Host "Plugin source:       $TargetDir"
+Write-Host "DataMind repo root:  $RepoRoot"
+Write-Host "Codex config:        $CodexConfig"
 Write-Host ""
 if (Test-Path (Join-Path $RepoRoot '.env')) {
     Write-Host "Before first use, make sure $RepoRoot\.env contains valid LLM and embedding credentials."
 }
-Write-Host "Next step: restart Codex, then enable 'DataMind Context' from Local Plugins."
+Write-Host ""
+Write-Host "Next step: fully quit Codex and reopen it. The plugin should appear in"
+Write-Host "          Codex's plugin list and start automatically."

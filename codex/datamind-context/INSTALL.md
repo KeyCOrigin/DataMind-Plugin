@@ -68,14 +68,25 @@ vendor/datamind/
 
 安装脚本会:
 
-- 将插件复制到 `~/plugins/datamind-context`。
-- 将包内 DataMind runtime 注册为插件运行时。
-- 创建 DataMind runtime 的 `.venv`。
-- 安装 `requirements.txt`。
+- 将插件复制到 `~/.codex/marketplaces/datamind/plugins/datamind-context/`。
+- 将整个 `~/.codex/marketplaces/datamind/` 目录写成一个 Codex 兼容的 marketplace（包括 `.agents/plugins/marketplace.json`）。
+- 在 `~/.codex/config.toml` 里追加（幂等）：
+  ```toml
+  [marketplaces.datamind]
+  source_type = "local"
+  source = "/Users/<you>/.codex/marketplaces/datamind"
+
+  [plugins."datamind-context@datamind"]
+  enabled = true
+  ```
+- 创建 DataMind runtime 的 `.venv` 并安装 `requirements.txt`。
 - 如果没有 `.env`，从 `.env.example` 创建一份。
-- 更新 `~/.agents/plugins/marketplace.json`。
+
+可以用 `DATAMIND_CODEX_MARKETPLACE` 环境变量覆盖 marketplace 名字（默认 `datamind`），如果你想把多个本地插件放到同一个 marketplace 里。
 
 然后编辑安装目录里的 `.env`，填入 LLM 和 embedding 配置。安装脚本输出里会显示具体路径。
+
+**注意**：Codex 是 **lazy** 的——它启动时不会立即 spawn datamind 进程，而是在你**第一次调用** `datamind_*` 工具（例如说"用 DataMind 看一下 profile"）时才把它拉起来。这是 Codex 的设计，跟 Claude Code 启动即起的行为不同。
 
 ## 安装方式 B: 使用已有 DataMind 仓库
 
@@ -214,7 +225,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 如果 Codex 能看到插件但调用失败，优先检查:
 
 1. 插件安装目录下的 `.datamind-repo-root` 是否指向有效 DataMind runtime。
-2. 如果是内置 runtime，检查 `~/plugins/datamind-context/vendor/datamind/` 是否存在。
+2. 如果是内置 runtime，检查 `~/.codex/marketplaces/datamind/plugins/datamind-context/vendor/datamind/` 是否存在。
 3. DataMind 依赖是否已安装；必要时重新运行 `./install.sh --force`。
 4. DataMind runtime 的 `.env` 是否配置了 LLM 和 embedding。
 5. 重启 Codex 后是否重新启用了插件。

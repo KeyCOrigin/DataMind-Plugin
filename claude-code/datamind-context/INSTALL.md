@@ -74,7 +74,7 @@ cd /path/to/extracted/datamind-context
 
 ## 安装方式 B: 跳过依赖安装
 
-如果你已经在另一个位置（例如 Codex 的安装目录 `~/plugins/datamind-context/vendor/datamind/.venv`）配好了 venv，可以跳过本目录建 venv：
+如果你已经在另一个位置（例如 Codex 的安装目录 `~/.codex/marketplaces/datamind/plugins/datamind-context/vendor/datamind/.venv`）配好了 venv，可以跳过本目录建 venv：
 
 ```bash
 ./install.sh --skip-deps
@@ -84,7 +84,7 @@ cd /path/to/extracted/datamind-context
 
 1. `${DATAMIND_PYTHON}` 环境变量
 2. `${CLAUDE_PLUGIN_DATA}/.venv/bin/python`（Claude Code 持久数据目录，由 SessionStart 钩子建立）
-3. `~/plugins/datamind-context/vendor/datamind/.venv/bin/python`（Codex 安装位置）
+3. `~/.codex/marketplaces/*/plugins/datamind-context/vendor/datamind/.venv/bin/python`（Codex 安装位置）
 4. 当前插件 `vendor/datamind/.venv/bin/python`
 5. 系统 `python3`
 
@@ -210,8 +210,8 @@ export DATAMIND_PYTHON=/path/to/specific/python
 |---|---|---|---|
 | 清单 | `.codex-plugin/plugin.json` | `.claude-plugin/plugin.json` | `.cursor-plugin/plugin.json` |
 | MCP 配置 | `.mcp.json`（相对路径） | `.claude-plugin/mcp.json`（`${CLAUDE_PLUGIN_ROOT}`） | `mcp.json`（`${userHome}`） |
-| 安装目录 | `~/plugins/datamind-context/` | Claude Code plugin cache（自动） | `~/.cursor/plugins/local/datamind-context/` |
-| Marketplace | `~/.agents/plugins/marketplace.json` | `claude plugin marketplace add` | Cursor 自动发现 |
+| 安装目录 | `~/.codex/marketplaces/datamind/plugins/datamind-context/` | Claude Code plugin cache（自动） | `~/.cursor/plugins/local/datamind-context/` |
+| Marketplace | `~/.codex/config.toml` | `claude plugin marketplace add` | Cursor 自动发现 |
 | 自动触发 | Skills (`SKILL.md`) | Skills (`SKILL.md`) | Skills + Cursor Rules (`~/.cursor/rules/`) |
 | 启用位置 | Codex 插件列表 | 装完即生效 | `Settings -> Plugins -> Local Plugins` |
 

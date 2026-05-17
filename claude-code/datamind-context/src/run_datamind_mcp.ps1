@@ -1,10 +1,10 @@
 # PowerShell launcher for the DataMind MCP server (Claude Code variant).
 #
 # Mirrors src/run_datamind_mcp.sh on Unix, with Claude-Code-specific probes:
-#   1. $env:DATAMIND_PYTHON                    (explicit override)
-#   2. $env:CLAUDE_PLUGIN_DATA\.venv           (persistent across plugin updates)
-#   3. <CODEX install>\vendor\datamind\.venv   (~/plugins/datamind-context/...)
-#   4. <bundled vendor/datamind>\.venv         (this plugin's own copy)
+#   1. $env:DATAMIND_PYTHON                                 (explicit override)
+#   2. $env:CLAUDE_PLUGIN_DATA\.venv                        (persistent across plugin updates)
+#   3. <CODEX install>\vendor\datamind\.venv                (~/.codex/marketplaces/*/plugins/datamind-context/...)
+#   4. <bundled vendor/datamind>\.venv                      (this plugin's own copy)
 #   5. system `python` / `py`
 #
 # Designed to be invoked via .claude-plugin/mcp.json with:
@@ -19,8 +19,19 @@ $RepoRoot = $env:DATAMIND_REPO_ROOT
 $BundledRepoRoot = Join-Path $PluginDir 'vendor\datamind'
 $RepoMarker = Join-Path $PluginDir '.datamind-repo-root'
 
-# Codex install location (created by codex install.sh / install.ps1).
-$CodexInstallRepo = Join-Path $env:USERPROFILE 'plugins\datamind-context\vendor\datamind'
+# Codex install location: probe under %USERPROFILE%\.codex\marketplaces\*\plugins\datamind-context\vendor\datamind
+$CodexInstallRepo = $null
+$CodexMarketplaces = Join-Path $env:USERPROFILE '.codex\marketplaces'
+if (Test-Path $CodexMarketplaces) {
+    foreach ($mp in (Get-ChildItem -Path $CodexMarketplaces -Directory -ErrorAction SilentlyContinue)) {
+        $candidate = Join-Path $mp.FullName 'plugins\datamind-context\vendor\datamind'
+        $py = Join-Path $candidate '.venv\Scripts\python.exe'
+        if ((Test-Path $py) -and (Test-Path (Join-Path $candidate 'config.py'))) {
+            $CodexInstallRepo = $candidate
+            break
+        }
+    }
+}
 
 if (-not $RepoRoot -and (Test-Path $RepoMarker)) {
     $RepoRoot = (Get-Content -Path $RepoMarker -TotalCount 1).Trim()
@@ -31,14 +42,13 @@ if (-not $RepoRoot -and (Test-Path (Join-Path $BundledRepoRoot 'config.py')) -an
 }
 
 # Claude Code copies plugins to a cache dir on each update, so a venv inside
-# the bundled vendor would be wiped. Prefer a Codex-style install at
-# %USERPROFILE%\plugins\datamind-context\vendor\datamind when available.
+# the bundled vendor would be wiped. Prefer a Codex install if one was found
+# (uses the same vendor/datamind/.venv layout).
 $RepoVenvPy = if ($RepoRoot) { Join-Path $RepoRoot '.venv\Scripts\python.exe' } else { $null }
 if (-not $RepoRoot -or -not (Test-Path $RepoVenvPy)) {
-    $CodexVenvPy = Join-Path $CodexInstallRepo '.venv\Scripts\python.exe'
-    if ((Test-Path $CodexVenvPy) -and (Test-Path (Join-Path $CodexInstallRepo 'config.py'))) {
+    if ($CodexInstallRepo) {
         $RepoRoot = $CodexInstallRepo
-        $RepoVenvPy = $CodexVenvPy
+        $RepoVenvPy = Join-Path $CodexInstallRepo '.venv\Scripts\python.exe'
     }
 }
 

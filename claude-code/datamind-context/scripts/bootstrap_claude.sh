@@ -3,8 +3,8 @@
 #
 # Goal: make sure a usable Python environment exists for vendor/datamind.
 # Strategy:
-#   1. If the Codex install at ~/plugins/datamind-context already has a venv,
-#      do nothing: run_datamind_mcp.sh will discover and reuse it.
+#   1. If a Codex install under ~/.codex/marketplaces/*/plugins/datamind-context/vendor/datamind
+#      already has a venv, do nothing: run_datamind_mcp.sh will discover and reuse it.
 #   2. Otherwise, lazily create a persistent venv under ${CLAUDE_PLUGIN_DATA}
 #      and install requirements.txt. Re-run pip install only when the bundled
 #      requirements.txt has changed since the last install.
@@ -27,9 +27,19 @@ if [[ -z "${PLUGIN_ROOT}" || -z "${DATA_DIR}" ]]; then
 fi
 
 REPO_BUNDLED="${PLUGIN_ROOT}/vendor/datamind"
-REPO_CODEX="${HOME}/plugins/datamind-context/vendor/datamind"
 
-if [[ -x "${REPO_CODEX}/.venv/bin/python" && -f "${REPO_CODEX}/config.py" ]]; then
+# Find a Codex install under ~/.codex/marketplaces/*/plugins/datamind-context/vendor/datamind
+REPO_CODEX=""
+if [[ -d "${HOME}/.codex/marketplaces" ]]; then
+  for d in "${HOME}/.codex/marketplaces"/*/plugins/datamind-context/vendor/datamind; do
+    if [[ -x "${d}/.venv/bin/python" && -f "${d}/config.py" ]]; then
+      REPO_CODEX="${d}"
+      break
+    fi
+  done
+fi
+
+if [[ -n "${REPO_CODEX}" ]]; then
   eprint "reusing Codex install at ${REPO_CODEX}"
   exit 0
 fi

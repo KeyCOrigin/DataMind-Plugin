@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "datamind-context": {
+    "dm": {
       "command": "powershell.exe",
       "args": [
         "-NoProfile",

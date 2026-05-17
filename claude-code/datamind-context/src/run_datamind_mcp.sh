@@ -6,8 +6,21 @@ PLUGIN_DIR="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
 REPO_ROOT="${DATAMIND_REPO_ROOT:-}"
 BUNDLED_REPO_ROOT="${PLUGIN_DIR}/vendor/datamind"
 
-# Codex install location (created by ./install.sh in the Codex flow).
-CODEX_INSTALL_REPO="${HOME}/plugins/datamind-context/vendor/datamind"
+# Codex install location (created by codex install.sh under ~/.codex/marketplaces).
+# We probe any marketplace dir for a datamind-context plugin with a venv.
+find_codex_install_repo() {
+  local base="${HOME}/.codex/marketplaces"
+  [[ -d "${base}" ]] || return 1
+  local match
+  for d in "${base}"/*/plugins/datamind-context/vendor/datamind; do
+    if [[ -x "${d}/.venv/bin/python" && -f "${d}/config.py" ]]; then
+      printf "%s\n" "${d}"
+      return 0
+    fi
+  done
+  return 1
+}
+CODEX_INSTALL_REPO="$(find_codex_install_repo || true)"
 
 if [[ -z "${REPO_ROOT}" && -f "${PLUGIN_DIR}/.datamind-repo-root" ]]; then
   REPO_ROOT="$(head -n 1 "${PLUGIN_DIR}/.datamind-repo-root")"
@@ -18,10 +31,10 @@ if [[ -z "${REPO_ROOT}" && -f "${BUNDLED_REPO_ROOT}/config.py" && -d "${BUNDLED_
 fi
 
 # Claude Code copies plugins into ~/.claude/plugins/cache on each update,
-# so a venv inside ${BUNDLED_REPO_ROOT} would be wiped. Prefer a Codex-style
-# install at ~/plugins/datamind-context/vendor/datamind when available.
+# so a venv inside ${BUNDLED_REPO_ROOT} would be wiped. Prefer a Codex install
+# at ~/.codex/marketplaces/*/plugins/datamind-context/vendor/datamind/ when available.
 if [[ -z "${REPO_ROOT}" || ! -x "${REPO_ROOT}/.venv/bin/python" ]]; then
-  if [[ -x "${CODEX_INSTALL_REPO}/.venv/bin/python" && -f "${CODEX_INSTALL_REPO}/config.py" ]]; then
+  if [[ -n "${CODEX_INSTALL_REPO}" ]]; then
     REPO_ROOT="${CODEX_INSTALL_REPO}"
   fi
 fi

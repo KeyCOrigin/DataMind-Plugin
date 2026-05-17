@@ -62,7 +62,7 @@ cd datamind-context
 ./install.sh --force
 ```
 
-安装脚本会把插件复制到 `~/plugins/datamind-context`，使用包内的 `vendor/datamind` 作为 DataMind runtime，创建 `.venv` 并安装依赖。
+安装脚本会把插件复制到 `~/.codex/marketplaces/datamind/plugins/datamind-context`，使用包内的 `vendor/datamind` 作为 DataMind runtime，创建 `.venv` 并安装依赖。
 
 如果你已经有自己的 DataMind 仓库，也可以显式指定：
 

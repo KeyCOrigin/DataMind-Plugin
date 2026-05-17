@@ -5,10 +5,11 @@
 DataMind Context 1.0.0 是首个稳定版本，重点是把 Codex / Claude Code / Cursor 三家插件统一到同一个 GitHub 仓库（`OpenDCAI/DataMind-Plugin`）下，分别承载完整、独立、可单独 `git clone` 安装的发布副本。
 
 - 三家共享同一份 `vendor/datamind/` runtime 和同一套 17-tool MCP server (`src/datamind_mcp.py`)，运行时数据都在 `~/.datamind-context/` 下，可以无缝切换 IDE。
-- Codex 子目录沿用原 `~/plugins/datamind-context/` + `~/.agents/plugins/marketplace.json` 安装路径。
-- Claude Code 子目录通过 `claude plugin marketplace add` + `claude plugin install` 一键集成；附带 SessionStart 钩子按需建立 venv，支持复用 Codex 已有 venv。
+- **Codex 子目录已重写以适配 OpenAI Codex 桌面应用**——之前的 `~/plugins/datamind-context/` + `~/.agents/plugins/marketplace.json` 路径 OpenAI Codex 不读，导致插件实际从未生效。新方案改用 `~/.codex/marketplaces/datamind/` + 在 `~/.codex/config.toml` 注册 `[marketplaces.datamind]` 和 `[plugins."datamind-context@datamind"]`。Codex 是 lazy spawn 的，首次调用工具时才启动 MCP 子进程。
+- Claude Code 子目录通过 `claude plugin marketplace add` + `claude plugin install` 一键集成；附带 SessionStart 钩子按需建立 venv，支持复用其他 venv 位置。
 - Cursor 子目录走 `~/.cursor/plugins/local/` 自动发现，并把等价的 Cursor Rule 复制到 `~/.cursor/rules/datamind.mdc`，让 Agent 看到"知识库 / RAG / 记忆"等关键词时主动调 `datamind_*`。
 - 仓库根附 `scripts/sync-core.sh`，以 codex 版为权威，自动同步 `src/*.py`、`vendor/datamind/`、`assets/` 到另两家。
+- 三家都新增 Windows PowerShell 安装脚本 (`install.ps1`) 和 `mcp.windows.json`，安装时自动激活适配 PowerShell 的 MCP 配置，不影响 Linux/macOS 路径。
 - MCP server 版本号同步升至 `1.0.0`。
 
 # DataMind Context Plugin 0.8.1

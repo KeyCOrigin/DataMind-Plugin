@@ -71,9 +71,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 |---|---|---|---|
 | Manifest | `.codex-plugin/plugin.json` | `.claude-plugin/plugin.json` | `.cursor-plugin/plugin.json` |
 | MCP config | `.mcp.json` (relative path) | `.claude-plugin/mcp.json` (uses `${CLAUDE_PLUGIN_ROOT}`) | `mcp.json` (uses `${userHome}`) |
-| Install location | `~/plugins/datamind-context/` | Claude Code plugin cache (auto-managed) | `~/.cursor/plugins/local/datamind-context/` |
+| Install location | `~/.codex/marketplaces/datamind/plugins/datamind-context/` | Claude Code plugin cache (auto-managed) | `~/.cursor/plugins/local/datamind-context/` |
 | Auto-trigger | Skills (`SKILL.md`) | Skills (`SKILL.md`) | Skills + a global Cursor Rule installed to `~/.cursor/rules/datamind.mdc` |
-| Marketplace | `~/.agents/plugins/marketplace.json` (auto-written) | `claude plugin marketplace add` | Auto-discovered from `~/.cursor/plugins/local/` |
+| Marketplace | `~/.codex/config.toml` (auto-written) | `claude plugin marketplace add` | Auto-discovered from `~/.cursor/plugins/local/` |
 | Verify | Codex plugin list | `claude mcp list` should show ✓ Connected | Cursor `Settings → Plugins → Local Plugins` |
 
 ## Cross-IDE data sharing

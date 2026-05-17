@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "datamind-context": {
+    "dm": {
       "command": "${CLAUDE_PLUGIN_ROOT}/src/run_datamind_mcp.sh",
       "args": [],
       "cwd": "${CLAUDE_PLUGIN_ROOT}"
