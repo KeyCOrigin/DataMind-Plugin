@@ -1,0 +1,9 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: datamind-dataplane-internal}
+spec:
+  podSelector: {matchLabels: {app: datamind-dataplane}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {app: datamind-gateway}}}]
+      ports: [{protocol: TCP, port: 8080}]

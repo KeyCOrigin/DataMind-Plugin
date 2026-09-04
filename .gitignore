@@ -1,5 +1,6 @@
 # Local artifacts (never commit)
 *.zip
+dist/
 .venv/
 __pycache__/
 .DS_Store

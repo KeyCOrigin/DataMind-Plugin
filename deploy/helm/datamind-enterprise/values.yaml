@@ -1,0 +1,53 @@
+gateway:
+  image: datamind-gateway:1.0.0
+  replicas: 2
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+dataplane:
+  image: datamind-dataplane:1.0.0
+  replicas: 1
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "2", memory: 2Gi}
+service:
+  port: 8080
+ingress:
+  enabled: false
+  className: nginx
+  host: datamind.company.com
+  tlsSecret: datamind-gateway-tls
+dataplaneUrl: http://datamind-dataplane:8080/mcp
+controlDatabaseUrl: ""
+controlDatabaseSecretKey: control-database-url
+dataplaneDatabaseSecretKey: dataplane-database-url
+dataRoot: /var/lib/datamind
+embedding:
+  provider: openai_compatible
+  apiBase: https://api.openai.com/v1
+  model: text-embedding-3-small
+  dimension: 1536
+  batchSize: 32
+  timeoutSeconds: 30
+  connectTimeoutSeconds: 10
+  maxRetries: 3
+  backoffBaseSeconds: 0.5
+  maxBatchTokens: ""
+embeddingApiKeySecretKey: embedding-api-key
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClass: ""
+mtls:
+  enabled: false
+  secretName: datamind-dataplane-mtls
+  caFile: /var/run/datamind-mtls/ca.crt
+  certFile: /var/run/datamind-mtls/tls.crt
+  keyFile: /var/run/datamind-mtls/tls.key
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+secrets:
+  existingSecret: datamind-enterprise-secrets

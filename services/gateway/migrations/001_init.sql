@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS tenants (tenant_id TEXT PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS profiles (tenant_id TEXT NOT NULL, profile_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (tenant_id, profile_id));
+CREATE TABLE IF NOT EXISTS source_states (tenant_id TEXT NOT NULL, profile_id TEXT NOT NULL, source_key TEXT NOT NULL, checkpoint_json JSONB, version BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (tenant_id, profile_id, source_key));
+CREATE TABLE IF NOT EXISTS ingest_batches (job_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, profile_id TEXT NOT NULL, status TEXT NOT NULL, payload_json JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS ingest_events (tenant_id TEXT NOT NULL, profile_id TEXT NOT NULL, source_key TEXT NOT NULL, external_id TEXT NOT NULL, content_hash TEXT NOT NULL, status TEXT NOT NULL, PRIMARY KEY (tenant_id, profile_id, source_key, external_id, content_hash));
+CREATE TABLE IF NOT EXISTS ingest_receipts (receipt_id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES ingest_batches(job_id), payload_json JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS agent_runs (agent_run_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, profile_id TEXT NOT NULL, trace_id TEXT, request_id TEXT, status TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS audit_events (event_id BIGSERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, profile_id TEXT NOT NULL, trace_id TEXT, request_id TEXT, agent_run_id TEXT, batch_id TEXT, event_type TEXT NOT NULL, payload_hash TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS trace_id TEXT;
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS request_id TEXT;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS trace_id TEXT;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS request_id TEXT;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS agent_run_id TEXT;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS batch_id TEXT;
+CREATE INDEX IF NOT EXISTS ingest_batches_tenant_status ON ingest_batches(tenant_id, profile_id, status);
+CREATE INDEX IF NOT EXISTS audit_events_tenant_time ON audit_events(tenant_id, profile_id, created_at);

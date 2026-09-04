@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">DataMind Context</title>
+  <desc id="desc">A blue data node mark</desc>
+  <rect width="128" height="128" rx="20" fill="#2563EB"/>
+  <path d="M30 36h68M30 64h68M30 92h68" stroke="#fff" stroke-width="8" stroke-linecap="round" opacity=".92"/>
+  <circle cx="30" cy="36" r="10" fill="#fff"/>
+  <circle cx="98" cy="64" r="10" fill="#BFDBFE"/>
+  <circle cx="30" cy="92" r="10" fill="#fff"/>
+</svg>

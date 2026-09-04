@@ -1,0 +1,9 @@
+{
+  "repository": "OpenDCAI/DataMind",
+  "commit": "enterprise-provider-patch-local",
+  "package_version": "0.3.2",
+  "wheel": "datamind-0.3.2-py3-none-any.whl",
+  "sha256": "36142e0165f1add4c372b8de7f4bb9d4eb739718e1e1c2db84a46cdca89707b1",
+  "build_provenance": "local DataMind source with build_datamind_agents AgentToolProvider seam",
+  "source_url": "https://github.com/OpenDCAI/DataMind"
+}

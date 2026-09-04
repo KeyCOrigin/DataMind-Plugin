@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datamind-dataplane"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "pydantic>=2.6", "datamind>=0.3.2", "datamind-contracts>=1.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
