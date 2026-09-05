@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: datamind
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector:
+    matchLabels: {app: datamind}
+  template:
+    metadata:
+      labels: {app: datamind}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: gateway
+          image: {{ .Values.gateway.image }}
+          command: ["datamind-mcp"]
+          env:
+            - {name: DATAMIND_DATAPLANE_COMMAND, value: datamind-dataplane-mcp}
+            - {name: DATAMIND_ENV, value: production}
+            - {name: DATAMIND_DATA_ROOT, value: {{ .Values.dataRoot | quote }}}
+            - name: DATAMIND_CONTROL_DATABASE_URL
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.controlDatabaseSecretKey }}}}
+            - name: DATAMIND_SERVICE_JWT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: dataplane-jwt-secret}}
+            - name: DATAMIND_GATEWAY_JWT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: gateway-jwt-secret}}
+            - {name: DATAMIND__LLM__PROTOCOL, value: {{ .Values.llm.protocol | quote }}}
+            - {name: DATAMIND__LLM__API_BASE, value: {{ .Values.llm.apiBase | quote }}}
+            - {name: DATAMIND__LLM__MODEL, value: {{ .Values.llm.model | quote }}}
+            - name: DATAMIND__LLM__API_KEY
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.llmApiKeySecretKey }}}}
+            - {name: DATAMIND__DB__DIALECT, value: postgres}
+            - name: DATAMIND__DB__DSN
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.dataplaneDatabaseSecretKey }}}}
+            - {name: DATAMIND__EMBEDDING__PROVIDER, value: {{ .Values.embedding.provider | quote }}}
+            - {name: DATAMIND__EMBEDDING__API_BASE, value: {{ .Values.embedding.apiBase | quote }}}
+            - {name: DATAMIND__EMBEDDING__MODEL, value: {{ .Values.embedding.model | quote }}}
+            - {name: DATAMIND__EMBEDDING__DIMENSION, value: {{ .Values.embedding.dimension | quote }}}
+            - name: DATAMIND__EMBEDDING__API_KEY
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.embeddingApiKeySecretKey }}}}
+          resources:
+{{- toYaml .Values.gateway.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+{{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - {name: datamind-data, mountPath: {{ .Values.dataRoot | quote }}}
+{{- end }}
+          readinessProbe:
+            exec: {command: ["/bin/sh", "-c", "kill -0 1"]}
+          livenessProbe:
+            exec: {command: ["/bin/sh", "-c", "kill -0 1"]}
+          startupProbe:
+            exec: {command: ["/bin/sh", "-c", "kill -0 1"]}
+            failureThreshold: 30
+            periodSeconds: 10
+{{- if .Values.persistence.enabled }}
+      volumes:
+        - name: datamind-data
+          persistentVolumeClaim: {claimName: datamind-dataplane-data}
+{{- end }}

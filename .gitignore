@@ -1,0 +1,30 @@
+# Local artifacts (never commit)
+*.zip
+dist/
+.venv/
+__pycache__/
+.DS_Store
+.pytest_cache/
+
+# DataMind runtime artifacts (per-machine)
+.datamind-repo-root
+.env
+storage/
+
+# Backup of pre-restructure mixed directory
+.backup-mix/
+
+# Local tooling state (OpenWolf, Claude Code session, etc.)
+CLAUDE.md
+.claude/
+.wolf/
+
+# IDE / OS junk
+.idea/
+.vscode/
+*.swp
+*~
+
+# Tooling state
+node_modules/
+.cache/

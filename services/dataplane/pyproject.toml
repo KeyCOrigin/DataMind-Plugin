@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datamind-dataplane"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.6", "datamind>=0.3.2", "datamind-contracts>=1.0"]
+
+[project.scripts]
+datamind-dataplane-mcp = "datamind_dataplane.stdio_server:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]

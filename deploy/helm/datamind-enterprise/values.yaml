@@ -1,0 +1,32 @@
+gateway:
+  image: datamind-gateway:1.0.0
+  replicas: 1
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+controlDatabaseSecretKey: control-database-url
+dataplaneDatabaseSecretKey: dataplane-database-url
+dataRoot: /var/lib/datamind
+llm:
+  protocol: openai_chat_completions
+  apiBase: https://api.openai.com/v1
+  model: gpt-4o-mini
+llmApiKeySecretKey: llm-api-key
+embedding:
+  provider: openai_compatible
+  apiBase: https://api.openai.com/v1
+  model: text-embedding-3-small
+  dimension: 1536
+  batchSize: 32
+  timeoutSeconds: 30
+  connectTimeoutSeconds: 10
+  maxRetries: 3
+  backoffBaseSeconds: 0.5
+  maxBatchTokens: ""
+embeddingApiKeySecretKey: embedding-api-key
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClass: ""
+secrets:
+  existingSecret: datamind-enterprise-secrets

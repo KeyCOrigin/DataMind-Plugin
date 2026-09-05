@@ -1,0 +1,40 @@
+{
+  "name": "datamind-context",
+  "version": "2.0.0+codex.20260904181232",
+  "description": "Enterprise Gateway MCP for DataMind's tenant-scoped StoreAgent and RetrieveAgent.",
+  "author": {
+    "name": "DataMind contributors",
+    "url": "https://github.com/OpenDCAI/DataMind-Plugin"
+  },
+  "homepage": "https://github.com/OpenDCAI/DataMind-Plugin",
+  "repository": "https://github.com/OpenDCAI/DataMind-Plugin",
+  "license": "MIT",
+  "keywords": [
+    "rag",
+    "knowledge-base",
+    "database",
+    "graph",
+    "memory",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "DataMind Context 2",
+    "shortDescription": "Guarded DataMind data-plane tools",
+    "longDescription": "Connects Codex to the local DataMind Gateway MCP over stdio. DataPlane capability tools remain internal to DataMind agents.",
+    "defaultPrompt": "Use the local DataMind Gateway agent tools for retrieval, storage, and external ingest; never expect direct KB, DB, Graph, Memory, or Skills tools.",
+    "developerName": "DataMind contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/OpenDCAI/DataMind-Plugin",
+    "brandColor": "#2563EB",
+    "composerIcon": "./assets/datamind-context.svg",
+    "logo": "./assets/datamind-context.svg",
+    "screenshots": []
+  }
+}

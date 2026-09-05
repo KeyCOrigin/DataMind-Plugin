@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "datamind": {
+      "command": "datamind-mcp",
+      "args": [],
+      "required": false,
+      "enabled_tools": [
+        "datamind_agent_retrieve",
+        "datamind_agent_store",
+        "datamind_agent_status",
+        "datamind_external_source_status",
+        "datamind_external_ingest_submit",
+        "datamind_external_job_status",
+        "datamind_external_receipt_get",
+        "datamind_profile_list",
+        "datamind_profile_status"
+      ],
+      "default_tools_approval_mode": "writes",
+      "tool_timeout_sec": 120
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "datamind",
+  "interface": {"displayName": "DataMind"},
+  "plugins": [{
+    "name": "datamind-context",
+    "source": {"source": "local", "path": "./plugins/datamind-context"},
+    "policy": {"installation": "AVAILABLE", "authentication": "ON_USE"},
+    "category": "Productivity"
+  }]
+}
