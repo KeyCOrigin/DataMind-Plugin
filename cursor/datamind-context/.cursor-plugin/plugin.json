@@ -1,0 +1,22 @@
+{
+  "name": "datamind-context",
+  "version": "1.0.0",
+  "description": "One-click Cursor plugin for DataMind: RAG, GraphRAG, managed folders, dynamic memory, feedback-aware structured memory, and a lightweight LLM Wiki.",
+  "author": {
+    "name": "DataMind contributors"
+  },
+  "homepage": "https://github.com/zwt233/DataMind",
+  "repository": "https://github.com/zwt233/DataMind",
+  "license": "MIT",
+  "keywords": [
+    "rag",
+    "graphrag",
+    "knowledge-base",
+    "memory",
+    "wiki",
+    "cursor"
+  ],
+  "logo": "assets/datamind-context.svg",
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json"
+}

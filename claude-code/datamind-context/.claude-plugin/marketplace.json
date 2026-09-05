@@ -1,0 +1,15 @@
+{
+  "name": "datamind",
+  "owner": {
+    "name": "DataMind contributors",
+    "email": ""
+  },
+  "description": "DataMind plugins for Claude Code (RAG, GraphRAG, Wiki, structured memory).",
+  "plugins": [
+    {
+      "name": "datamind-context",
+      "source": "./",
+      "description": "DataMind RAG/GraphRAG, managed folders, Wiki, and feedback-aware structured memory."
+    }
+  ]
+}

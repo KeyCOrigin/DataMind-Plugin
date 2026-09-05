@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: datamind-dataplane}
+spec:
+  replicas: {{ .Values.dataplane.replicas }}
+  selector: {matchLabels: {app: datamind-dataplane}}
+  template:
+    metadata: {labels: {app: datamind-dataplane}}
+    spec:
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: dataplane
+          image: {{ .Values.dataplane.image }}
+          ports: [{containerPort: 8080}]
+{{- if .Values.mtls.enabled }}
+          command: ["uvicorn", "datamind_dataplane.server:app", "--host", "0.0.0.0", "--port", "8080", "--ssl-certfile", "/var/run/datamind-mtls/tls.crt", "--ssl-keyfile", "/var/run/datamind-mtls/tls.key"]
+{{- end }}
+          env:
+            - {name: DATAMIND_SERVICE_JWT_SECRET, valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: dataplane-jwt-secret}}}
+            - {name: DATAMIND_DATA_ROOT, value: {{ .Values.dataRoot | quote }}}
+            - {name: DATAMIND__DB__DIALECT, value: postgres}
+            - name: DATAMIND__DB__DSN
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.dataplaneDatabaseSecretKey }}}}
+            - {name: DATAMIND__EMBEDDING__PROVIDER, value: {{ .Values.embedding.provider | quote }}}
+            - {name: DATAMIND__EMBEDDING__API_BASE, value: {{ .Values.embedding.apiBase | quote }}}
+            - {name: DATAMIND__EMBEDDING__MODEL, value: {{ .Values.embedding.model | quote }}}
+            - {name: DATAMIND__EMBEDDING__DIMENSION, value: {{ .Values.embedding.dimension | quote }}}
+            - {name: DATAMIND__EMBEDDING__BATCH_SIZE, value: {{ .Values.embedding.batchSize | quote }}}
+            - {name: DATAMIND__EMBEDDING__TIMEOUT_S, value: {{ .Values.embedding.timeoutSeconds | quote }}}
+            - {name: DATAMIND__EMBEDDING__CONNECT_TIMEOUT_S, value: {{ .Values.embedding.connectTimeoutSeconds | quote }}}
+            - {name: DATAMIND__EMBEDDING__MAX_RETRIES, value: {{ .Values.embedding.maxRetries | quote }}}
+            - {name: DATAMIND__EMBEDDING__BACKOFF_BASE_S, value: {{ .Values.embedding.backoffBaseSeconds | quote }}}
+{{- if .Values.embedding.maxBatchTokens }}
+            - {name: DATAMIND__EMBEDDING__MAX_BATCH_TOKENS, value: {{ .Values.embedding.maxBatchTokens | quote }}}
+{{- end }}
+            - name: DATAMIND__EMBEDDING__API_KEY
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.embeddingApiKeySecretKey }}}}
+{{- if .Values.mtls.enabled }}
+            - {name: DATAMIND_MTLS_CERT_FILE, value: {{ .Values.mtls.certFile | quote }}}
+            - {name: DATAMIND_MTLS_KEY_FILE, value: {{ .Values.mtls.keyFile | quote }}}
+{{- end }}
+          readinessProbe: {httpGet: {path: /readyz, port: 8080}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8080}}
+          startupProbe: {httpGet: {path: /healthz, port: 8080}, failureThreshold: 30, periodSeconds: 10}
+          resources:
+{{- toYaml .Values.dataplane.resources | nindent 12 }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+{{- if or .Values.persistence.enabled .Values.mtls.enabled }}
+          volumeMounts:
+{{- if .Values.persistence.enabled }}
+            - {name: datamind-data, mountPath: {{ .Values.dataRoot | quote }}}
+{{- end }}
+{{- if .Values.mtls.enabled }}
+            - {name: dataplane-mtls, mountPath: /var/run/datamind-mtls, readOnly: true}
+{{- end }}
+{{- end }}
+{{- if or .Values.persistence.enabled .Values.mtls.enabled }}
+      volumes:
+{{- if .Values.persistence.enabled }}
+        - name: datamind-data
+          persistentVolumeClaim: {claimName: datamind-dataplane-data}
+{{- end }}
+{{- if .Values.mtls.enabled }}
+        - name: dataplane-mtls
+          secret: {secretName: {{ .Values.mtls.secretName }}}
+{{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: datamind-dataplane}
+spec:
+  type: ClusterIP
+  selector: {app: datamind-dataplane}
+  ports: [{port: 8080, targetPort: 8080}]

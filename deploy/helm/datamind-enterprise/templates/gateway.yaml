@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: datamind-gateway}
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector: {matchLabels: {app: datamind-gateway}}
+  template:
+    metadata: {labels: {app: datamind-gateway}}
+    spec:
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: gateway
+          image: {{ .Values.gateway.image }}
+          ports: [{containerPort: 8080}]
+          env:
+            - {name: DATAMIND_DATAPLANE_MCP_URL, value: {{ .Values.dataplaneUrl | quote }}}
+            - name: DATAMIND_CONTROL_DATABASE_URL
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.controlDatabaseSecretKey }}}}
+            - {name: DATAMIND_ENV, value: production}
+            - {name: DATAMIND_SERVICE_JWT_SECRET, valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: dataplane-jwt-secret}}}
+            - {name: DATAMIND_GATEWAY_JWT_SECRET, valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: gateway-jwt-secret}}}
+{{- if .Values.mtls.enabled }}
+            - {name: DATAMIND_MCP_CA_FILE, value: {{ .Values.mtls.caFile | quote }}}
+            - {name: DATAMIND_MCP_CLIENT_CERT, value: {{ .Values.mtls.certFile | quote }}}
+            - {name: DATAMIND_MCP_CLIENT_KEY, value: {{ .Values.mtls.keyFile | quote }}}
+{{- end }}
+          readinessProbe: {httpGet: {path: /readyz, port: 8080}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8080}}
+          startupProbe: {httpGet: {path: /healthz, port: 8080}, failureThreshold: 30, periodSeconds: 10}
+          resources:
+{{- toYaml .Values.gateway.resources | nindent 12 }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+{{- if .Values.mtls.enabled }}
+          volumeMounts:
+            - {name: dataplane-mtls, mountPath: /var/run/datamind-mtls, readOnly: true}
+{{- end }}
+{{- if .Values.mtls.enabled }}
+      volumes:
+        - name: dataplane-mtls
+          secret: {secretName: {{ .Values.mtls.secretName }}}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: datamind-gateway}
+spec:
+  selector: {app: datamind-gateway}
+  ports: [{port: 8080, targetPort: 8080}]

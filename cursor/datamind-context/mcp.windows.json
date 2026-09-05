@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "datamind-context": {
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File",
+        "${userHome}/.cursor/plugins/local/datamind-context/src/run_datamind_mcp.ps1"
+      ]
+    }
+  }
+}

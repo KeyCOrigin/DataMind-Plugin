@@ -1,0 +1,43 @@
+{
+  "name": "datamind-context",
+  "version": "1.0.0",
+  "description": "One-click Codex plugin for DataMind RAG, GraphRAG, managed folders, dynamic memory, feedback-aware structured memory, and a lightweight LLM Wiki.",
+  "author": {
+    "name": "DataMind contributors",
+    "url": "https://github.com/zwt233/DataMind"
+  },
+  "homepage": "https://github.com/zwt233/DataMind",
+  "repository": "https://github.com/zwt233/DataMind",
+  "license": "MIT",
+  "keywords": [
+    "rag",
+    "graphrag",
+    "knowledge-base",
+    "memory",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "DataMind Context",
+    "shortDescription": "RAG, GraphRAG, folders, feedback-aware memory, and Wiki",
+    "longDescription": "Connect Codex to DataMind so local folders can be extracted into managed knowledge bases, summarized into a lightweight Markdown Wiki, high-value habits and high-value Q&A can be recorded automatically, structured memory can recall preferences and workflows, next-state feedback can be captured as reusable hints, Wiki health can be linted, and static knowledge plus dynamic memory can be queried through RAG or GraphRAG tools. Release packages can include a bundled DataMind runtime for one-click installation.",
+    "developerName": "DataMind contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/zwt233/DataMind",
+    "defaultPrompt": [
+      "用 DataMind 使用这个文件夹：",
+      "用 DataMind 问：",
+      "用 DataMind 更新这个文件夹："
+    ],
+    "brandColor": "#2563EB",
+    "composerIcon": "./assets/datamind-context.svg",
+    "logo": "./assets/datamind-context.svg",
+    "screenshots": []
+  }
+}
