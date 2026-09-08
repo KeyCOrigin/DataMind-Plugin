@@ -12,7 +12,8 @@ from datamind.capabilities.graph import build_graph_service, build_graph_tools
 from datamind.capabilities.memory import build_memory_service, build_memory_tools
 from datamind.capabilities.skills import build_skills_service, build_skills_tools, build_skills_store_tools
 from datamind.capabilities.ingest import build_ingest_service, build_ingest_tools
-from datamind.core.tools import ToolRegistry
+from datamind.core.tools import ToolRegistry, ToolSpec
+from .rag import exact_uid_results, make_search_handler
 
 
 def data_root() -> Path:
@@ -49,7 +50,23 @@ class DataPlaneServices:
         kb = build_kb_service(settings, llm_client=client, embedding=embedding)
         db = build_db_service(settings, llm_client=client)
         graph = build_graph_service(settings)
-        self.registry.extend(build_kb_tools(kb))
+        kb_tools = build_kb_tools(kb)
+        # Keep DataMind's KB implementation as the source of truth, while
+        # presenting message-level, UID-aware results to RetrieveAgent.
+        search_spec = next(spec for spec in kb_tools if spec.name == "kb_search")
+        kb_tools = [spec for spec in kb_tools if spec.name != "kb_search"]
+        async def _exact_uid_lookup(uids: set[str]) -> list[dict[str, Any]]:
+            records = await kb.vector_store.get_all_texts()
+            return exact_uid_results(records, uids)
+
+        kb_tools.append(ToolSpec(
+            name=search_spec.name,
+            description=search_spec.description + " Results are de-duplicated by document/message UID.",
+            input_schema=search_spec.input_schema,
+            handler=make_search_handler(search_spec.handler, exact_lookup=_exact_uid_lookup),
+            metadata=search_spec.metadata,
+        ))
+        self.registry.extend(kb_tools)
         self.registry.extend(build_db_tools(db))
         self.registry.extend(build_graph_tools(graph))
         self.registry.extend(build_memory_tools(build_memory_service(settings, llm_client=client, embedding=embedding)))

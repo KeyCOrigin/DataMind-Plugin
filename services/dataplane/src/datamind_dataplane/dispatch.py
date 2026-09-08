@@ -85,6 +85,9 @@ async def dispatch(message: dict[str, Any], *, authorization: str | None) -> dic
                 arguments,
                 profile_root=root.resolve(),
             )
+            # `confirm` authorizes the DataPlane boundary; it is not part of
+            # the underlying DataMind capability tool schemas.
+            arguments.pop("confirm", None)
             value = await services.call(name, arguments)
             result = {
                 "content": [{"type": "text", "text": json.dumps(value, default=str)}],

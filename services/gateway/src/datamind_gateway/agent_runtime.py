@@ -42,6 +42,7 @@ class AgentRuntime:
         async with lock:
             if key not in self._bundles:
                 from datamind.agent import build_datamind_agents
+                from datamind.core.context import RequestContext as DataMindRequestContext
                 command = os.environ.get("DATAMIND_DATAPLANE_COMMAND", sys.executable)
                 args = tuple(filter(None, os.environ.get(
                     "DATAMIND_DATAPLANE_ARGS", "-m datamind_dataplane.stdio_server").split()))
@@ -50,7 +51,18 @@ class AgentRuntime:
                 store_client = McpClient(command, args, token_factory=lambda: issue_service_token(
                     context, role="store", scope="datamind.dataplane.write"))
                 provider = McpToolProvider(retrieve_client, store_client=store_client, context=context.model_dump())
-                system = await build_datamind_agents(_settings(), tool_provider=provider, context=context)
+                settings = _settings()
+                settings.data.profile = context.profile_id
+                # DataMind's agent builder uses its in-process context type;
+                # the provider keeps the enterprise contract context above
+                # for tenant/profile propagation to DataPlane.
+                agent_context = DataMindRequestContext.new(
+                    profile=context.profile_id,
+                    user_id=context.user_id,
+                )
+                system = await build_datamind_agents(
+                    settings, tool_provider=provider, context=agent_context
+                )
                 self._bundles[key] = (AgentBundle(system, provider), time.monotonic())
                 while len(self._bundles) > self._max_bundles:
                     _, (old, _) = self._bundles.popitem(last=False)
