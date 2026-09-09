@@ -27,6 +27,7 @@ class _Bundle:
         self.result = result
 
     async def ingest(self, _prompt):
+        self.prompt = _prompt
         return self.result
 
 
@@ -63,9 +64,27 @@ def test_empty_receipts_do_not_commit_checkpoint():
         })
         await service._run(job_id, _batch(), context, "test:source:records:main")
         job = await state.get_job(job_id)
-        assert job["status"] == "failed"
+        assert job["status"] == "partial"
         assert job["error"] == "store_agent_no_receipts"
         assert job["checkpoint_committed"] is False
         assert state.checkpoints == {}
+
+    asyncio.run(run())
+
+
+def test_external_ingest_requires_safe_stable_kb_source_names():
+    async def run():
+        state = InMemoryGatewayState()
+        runtime = _Runtime({"receipts": [{"receipt_id": "r1", "status": "success"}]})
+        service = ExternalIngestService(runtime, state)
+        context = RequestContext(tenant_id="tenant", profile_id="default")
+        job_id = "job-test-source-name"
+        await state.create_job({
+            "job_id": job_id, "status": "accepted", "tenant_id": context.tenant_id,
+            "profile_id": context.profile_id, "receipts": [],
+        })
+        await service._run(job_id, _batch(), context, "test:source:records:main")
+        assert "不能使用 URL、URI 或包含路径分隔符" in runtime.bundle.prompt
+        assert "feishu_<space_id>_<node_token>_part_<part>.txt" in runtime.bundle.prompt
 
     asyncio.run(run())

@@ -12,6 +12,10 @@ class GatewayState(Protocol):
     async def get_job(self, job_id: str) -> dict[str, Any] | None: ...
     async def reserve_events(self, *, tenant_id: str, profile_id: str, source_key: str,
                              events: list[dict[str, Any]]) -> list[dict[str, Any]]: ...
+    async def mark_events_status(self, *, tenant_id: str, profile_id: str, source_key: str,
+                                 events: list[dict[str, Any]], status: str) -> None: ...
+    async def get_event_statuses(self, *, tenant_id: str, profile_id: str, source_key: str,
+                                 events: list[dict[str, Any]]) -> dict[tuple[str, str], str]: ...
     async def add_receipts(self, job_id: str, receipts: list[dict[str, Any]]) -> None: ...
     async def get_receipts(self, job_id: str) -> list[dict[str, Any]]: ...
     async def commit_checkpoint(self, *, tenant_id: str, profile_id: str, source_key: str,
@@ -47,11 +51,30 @@ class InMemoryGatewayState:
             fresh = []
             for item in events:
                 key = (tenant_id, profile_id, source_key, item["external_id"], item["content_hash"])
-                if key in self.events:
+                if key in self.events and self.events[key].get("status") == "committed":
                     continue
-                self.events[key] = {**item, "status": "accepted"}
+                self.events.setdefault(key, {**item, "status": "accepted"})
                 fresh.append(item)
             return fresh
+
+    async def mark_events_status(self, *, tenant_id: str, profile_id: str, source_key: str,
+                                 events: list[dict[str, Any]], status: str) -> None:
+        async with self._lock:
+            for item in events:
+                key = (tenant_id, profile_id, source_key, item["external_id"], item["content_hash"])
+                if key in self.events:
+                    self.events[key]["status"] = status
+
+    async def get_event_statuses(self, *, tenant_id: str, profile_id: str, source_key: str,
+                                 events: list[dict[str, Any]]) -> dict[tuple[str, str], str]:
+        async with self._lock:
+            return {
+                (item["external_id"], item["content_hash"]): self.events.get(
+                    (tenant_id, profile_id, source_key, item["external_id"], item["content_hash"]),
+                    {"status": "pending"},
+                ).get("status", "pending")
+                for item in events
+            }
 
     async def add_receipts(self, job_id: str, receipts: list[dict[str, Any]]) -> None:
         self.receipts.setdefault(job_id, []).extend(receipts)
@@ -125,7 +148,43 @@ class PostgresGatewayState:
                 )
                 if result.endswith("1"):
                     fresh.append(item)
+                else:
+                    status = await connection.fetchval(
+                        """SELECT status FROM ingest_events
+                           WHERE tenant_id=$1 AND profile_id=$2 AND source_key=$3
+                             AND external_id=$4 AND content_hash=$5""",
+                        tenant_id, profile_id, source_key, item["external_id"], item["content_hash"],
+                    )
+                    if status != "committed":
+                        fresh.append(item)
         return fresh
+
+    async def mark_events_status(self, *, tenant_id: str, profile_id: str, source_key: str,
+                                 events: list[dict[str, Any]], status: str) -> None:
+        pool = await self._get_pool()
+        async with pool.acquire() as connection:
+            await connection.executemany(
+                """UPDATE ingest_events SET status=$6
+                   WHERE tenant_id=$1 AND profile_id=$2 AND source_key=$3
+                     AND external_id=$4 AND content_hash=$5""",
+                [(tenant_id, profile_id, source_key, item["external_id"], item["content_hash"], status)
+                 for item in events],
+            )
+
+    async def get_event_statuses(self, *, tenant_id: str, profile_id: str, source_key: str,
+                                 events: list[dict[str, Any]]) -> dict[tuple[str, str], str]:
+        if not events:
+            return {}
+        pool = await self._get_pool()
+        async with pool.acquire() as connection:
+            rows = await connection.fetch(
+                """SELECT external_id, content_hash, status FROM ingest_events
+                   WHERE tenant_id=$1 AND profile_id=$2 AND source_key=$3
+                     AND (external_id, content_hash) IN (SELECT x.external_id, x.content_hash
+                       FROM jsonb_to_recordset($4::jsonb) AS x(external_id text, content_hash text))""",
+                tenant_id, profile_id, source_key, json.dumps(events),
+            )
+        return {(row["external_id"], row["content_hash"]): row["status"] for row in rows}
 
     async def add_receipts(self, job_id: str, receipts: list[dict[str, Any]]) -> None:
         if not receipts:
