@@ -21,6 +21,7 @@ def guard_args(name: str, args: dict, *, profile_root: Path) -> None:
         if not re.match(r"^\s*(select|with)\b", sql, re.I) or _DANGEROUS_SQL.search(sql) or ";" in sql.rstrip().rstrip(";"):
             raise PermissionError("db_query_sql only permits one read-only SELECT/WITH statement")
     writes = {"kb_add_text", "kb_add_file", "kb_add_path", "kb_reindex", "db_import_records", "db_import_csv",
-              "graph_upsert_triples", "graph_add_triples_from_text", "memory_save", "memory_forget", "skill_upsert"}
+              "graph_upsert_triples", "graph_add_triples_from_text", "memory_save", "memory_forget", "skill_upsert",
+              "pdf_extract_text"}
     if name in writes and args.get("confirm") is not True:
         raise PermissionError("DataPlane write requires confirm=true")

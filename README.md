@@ -44,6 +44,12 @@ DataMind 也不会获得这些平台的凭据。Codex 读取外部内容后，�
 分块交给同一个 StoreAgent；StoreAgent 自己决定调用 KB、DB 或 Graph 写工具。
 它不能反向复用 Codex 的外部 MCP 会话，除非另行把外部凭据配置到 Gateway。
 
+个人微信 iLink 也遵守同一边界：iLink Channel 实现在 Codex 本地目录
+`~/.codex/channels/weixin-ilink`，由 Codex 进程管理二维码登录、长轮询、附件
+校验和确认流程。它不属于 DataMind Plugin，不在本仓库安装微信 SDK，不把微信
+Token 写入 DataMind，也不向 DataMind 暴露邮箱、飞书或微信底层工具。确认后，
+Codex 仅通过 `datamind` Gateway MCP 调用同一个 StoreAgent。
+
 邮箱批量读取应使用邮箱 MCP 提供的批量工具，一次 IMAP 登录读取多个 UID，
 再把结果分块交给 StoreAgent；不要让 Codex 对每封邮件重复建立 IMAP 会话。
 

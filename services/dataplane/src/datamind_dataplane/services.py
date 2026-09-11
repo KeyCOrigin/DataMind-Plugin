@@ -14,6 +14,7 @@ from datamind.capabilities.skills import build_skills_service, build_skills_tool
 from datamind.capabilities.ingest import build_ingest_service, build_ingest_tools
 from datamind.core.tools import ToolRegistry, ToolSpec
 from .rag import exact_uid_results, make_search_handler
+from .pdf import build_pdf_tools
 
 
 def data_root() -> Path:
@@ -74,6 +75,9 @@ class DataPlaneServices:
         self.registry.extend(build_skills_tools(skills))
         self.registry.extend(build_skills_store_tools(skills))
         self.registry.extend(build_ingest_tools(build_ingest_service(settings=settings, kb=kb, db=db, graph=graph, llm_client=client)))
+        # PDF extraction is an internal StoreAgent capability.  It is kept in
+        # the DataPlane so every ingress path follows the same text/OCR flow.
+        self.registry.extend(build_pdf_tools())
 
     async def call(self, name: str, arguments: dict[str, Any]) -> Any:
         spec = self.registry.get(name)

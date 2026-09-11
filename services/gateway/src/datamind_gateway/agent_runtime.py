@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import os
 import sys
 import time
@@ -29,6 +30,9 @@ class AgentRuntime:
         self._locks: dict[tuple[str, str, str], asyncio.Lock] = {}
         self._max_bundles = max(1, int(os.environ.get("DATAMIND_AGENT_CACHE_SIZE", "128")))
         self._idle_timeout = max(0, int(os.environ.get("DATAMIND_AGENT_IDLE_TIMEOUT", "1800")))
+        self._store_scope: contextvars.ContextVar[str] = contextvars.ContextVar(
+            "datamind_store_scope", default="datamind.dataplane.write"
+        )
 
     async def get(self, context: RequestContext) -> AgentBundle:
         """Return the one StoreAgent/RetrieveAgent pair for a context."""
@@ -49,7 +53,7 @@ class AgentRuntime:
                 retrieve_client = McpClient(command, args, token_factory=lambda: issue_service_token(
                     context, role="retrieve", scope="datamind.dataplane.read"))
                 store_client = McpClient(command, args, token_factory=lambda: issue_service_token(
-                    context, role="store", scope="datamind.dataplane.write"))
+                    context, role="store", scope=self._store_scope.get()))
                 provider = McpToolProvider(retrieve_client, store_client=store_client, context=context.model_dump())
                 settings = _settings()
                 settings.data.profile = context.profile_id
@@ -68,6 +72,16 @@ class AgentRuntime:
                     _, (old, _) = self._bundles.popitem(last=False)
                     await old.close()
         return self._bundles[key][0]
+
+    async def ingest(self, context: RequestContext, message: str, *, external: bool = False) -> Any:
+        """Run the one StoreAgent with a request-scoped DataPlane delegation."""
+        bundle = await self.get(context)
+        scope = "datamind.dataplane.external_write" if external else "datamind.dataplane.write"
+        marker = self._store_scope.set(scope)
+        try:
+            return await bundle.system.ingest(message)
+        finally:
+            self._store_scope.reset(marker)
 
     async def _evict_idle(self) -> None:
         if not self._idle_timeout:

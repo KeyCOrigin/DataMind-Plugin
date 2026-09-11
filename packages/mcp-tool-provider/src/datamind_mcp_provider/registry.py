@@ -10,7 +10,8 @@ _READ = {"kb_search", "kb_list_documents", "kb_count", "db_list_tables", "db_des
          "graph_search_entities", "graph_traverse", "graph_neighbors", "skill_search", "skill_get", "skill_list",
          "memory_recall", "memory_list_profiles"}
 _WRITE = {"kb_add_text", "kb_add_file", "kb_add_path", "kb_reindex", "db_import_records", "db_import_csv",
-          "graph_upsert_triples", "graph_add_triples_from_text", "memory_save", "memory_forget", "skill_upsert"}
+          "graph_upsert_triples", "graph_add_triples_from_text", "memory_save", "memory_forget", "skill_upsert",
+          "pdf_extract_text"}
 
 
 class McpToolProvider:

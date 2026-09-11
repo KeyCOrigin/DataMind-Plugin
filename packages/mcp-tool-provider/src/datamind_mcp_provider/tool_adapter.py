@@ -15,7 +15,8 @@ def registry_from_tools(tools: list[dict[str, Any]], client: Any, *, context: di
         access = "write" if name in {
             "kb_add_text", "kb_add_file", "kb_add_path", "kb_reindex",
             "db_import_records", "db_import_csv", "graph_upsert_triples",
-            "graph_add_triples_from_text", "memory_save", "memory_forget", "skill_upsert"
+            "graph_add_triples_from_text", "memory_save", "memory_forget", "skill_upsert",
+            "pdf_extract_text"
         } else "read"
 
         async def invoke(_name: str = name, _access: str = access, **kwargs: Any) -> Any:

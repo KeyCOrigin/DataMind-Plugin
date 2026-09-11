@@ -28,3 +28,4 @@ CLAUDE.md
 # Tooling state
 node_modules/
 .cache/
+*.egg-info/

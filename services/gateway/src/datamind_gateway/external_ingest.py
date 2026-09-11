@@ -154,7 +154,6 @@ class ExternalIngestService:
         errors: list[dict[str, str]] = []
         try:
             async with self._semaphore:
-                bundle = await self.runtime.get(context)
                 for item in batch.items:
                     event_data = self._event(item)
                     statuses = await self.state.get_event_statuses(tenant_id=context.tenant_id,
@@ -165,10 +164,13 @@ class ExternalIngestService:
                     await self.state.mark_events_status(tenant_id=context.tenant_id, profile_id=context.profile_id,
                                                         source_key=source_key, events=[event_data], status="processing")
                     try:
-                        result = await asyncio.wait_for(
-                            bundle.system.ingest(build_store_request(self._item_prompt(batch, item))),
-                            timeout=self._item_timeout,
-                        )
+                        prompt = build_store_request(self._item_prompt(batch, item), external=True)
+                        if hasattr(self.runtime, "ingest"):
+                            operation = self.runtime.ingest(context, prompt, external=True)
+                        else:
+                            bundle = await self.runtime.get(context)
+                            operation = bundle.system.ingest(prompt)
+                        result = await asyncio.wait_for(operation, timeout=self._item_timeout)
                         receipts, receipt_error = self._receipts(result)
                         if receipt_error:
                             raise RuntimeError(receipt_error)

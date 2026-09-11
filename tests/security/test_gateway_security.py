@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "packages/contracts/src"))
 sys.path.insert(0, str(ROOT / "services/gateway/src"))
 
 from datamind_gateway.auth import allowed_profile, verify_bearer
+from datamind_gateway.tools import store
 
 
 def _token(claims):
@@ -34,3 +35,12 @@ def test_gateway_rejects_invalid_and_expired_tokens(monkeypatch):
 def test_profile_must_be_token_allowed():
     with pytest.raises(Exception):
         allowed_profile({"profiles": ["default"]}, "admin")
+
+
+def test_store_rejects_unknown_source_trust():
+    import asyncio
+
+    with pytest.raises(ValueError, match="source_trust"):
+        asyncio.run(store(None, {
+            "scopes": ["datamind:store"], "sub": "u", "tenant_id": "t", "profiles": ["default"],
+        }, {"message": "data", "confirm": True, "source_trust": "admin"}))
