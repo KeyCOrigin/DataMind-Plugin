@@ -11,7 +11,7 @@ from .auth import verify_bearer
 from .external_ingest import ExternalIngestService
 from .schemas import GATEWAY_TOOLS
 from .tenancy import context_from_claims
-from .tools import retrieve, store
+from .tools import retrieve, store, store_batch
 
 
 async def dispatch(
@@ -44,6 +44,8 @@ async def dispatch(
                 value = await retrieve(runtime, claims, args)
             elif name == "datamind_agent_store":
                 value = await store(runtime, claims, args)
+            elif name == "datamind_agent_store_batch":
+                value = await store_batch(runtime, claims, args)
             elif name == "datamind_agent_status":
                 value = {"status": "ready", "cached_bundles": len(runtime._bundles)}
             elif name == "datamind_profile_list":

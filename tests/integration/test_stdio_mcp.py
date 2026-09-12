@@ -37,5 +37,6 @@ def test_gateway_stdio_exposes_only_public_tools() -> None:
 
     assert initialize["result"]["serverInfo"]["name"] == "datamind"
     names = {tool["name"] for tool in listing["result"]["tools"]}
-    assert len(names) == 9
+    assert len(names) == 10
+    assert "datamind_agent_store_batch" in names
     assert not any(name.startswith(("kb_", "db_", "graph_", "memory_", "skill_")) for name in names)

@@ -6,7 +6,16 @@ build-backend = "setuptools.build_meta"
 name = "datamind-dataplane"
 version = "1.0.0"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2.6", "pypdf>=5.0", "datamind>=0.3.2", "datamind-contracts>=1.0"]
+dependencies = [
+  "pydantic>=2.6",
+  "datamind>=0.3.2",
+  "datamind-contracts>=1.0",
+  "pypdf>=5.0",
+  "openpyxl>=3.1",
+  "xlrd>=2.0",
+  "Pillow>=10.0",
+  "tzdata>=2024.1",
+]
 
 [project.scripts]
 datamind-dataplane-mcp = "datamind_dataplane.stdio_server:run"

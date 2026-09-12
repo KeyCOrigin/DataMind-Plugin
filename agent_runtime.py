@@ -24,51 +24,47 @@ class AgentBundle:
         await self.provider.close()
 
 
-@dataclass
-class _KeyLock:
-    lock: asyncio.Lock
-    users: int = 0
-
-
 class AgentRuntime:
     def __init__(self) -> None:
-        self._bundles: OrderedDict[tuple[str, str, str], tuple[AgentBundle, float]] = OrderedDict()
-        self._locks: dict[tuple[str, str, str], _KeyLock] = {}
-        self._locks_guard = asyncio.Lock()
+        # A bundle owns a request-scoped DataMind context.  Include every
+        # identity field that can affect memory/audit isolation in the cache
+        # key; tenant/profile alone would leak the first user's session.
+        self._bundles: OrderedDict[tuple[str, str, str, str, str, str, str, str], tuple[AgentBundle, float]] = OrderedDict()
+        self._locks: dict[tuple[str, str, str, str, str, str, str, str], asyncio.Lock] = {}
         self._max_bundles = max(1, int(os.environ.get("DATAMIND_AGENT_CACHE_SIZE", "128")))
         self._idle_timeout = max(0, int(os.environ.get("DATAMIND_AGENT_IDLE_TIMEOUT", "1800")))
-        self._closed = False
         self._store_scope: contextvars.ContextVar[str] = contextvars.ContextVar(
             "datamind_store_scope", default="datamind.dataplane.write"
         )
 
     async def get(self, context: RequestContext) -> AgentBundle:
         """Return the one StoreAgent/RetrieveAgent pair for a context."""
-        if self._closed:
-            raise RuntimeError("Agent runtime is closed")
-        key = (context.tenant_id, context.profile_id, context.policy_version)
+        key = (
+            context.tenant_id,
+            context.profile_id,
+            context.user_id or "",
+            context.session_id,
+            context.trace_id,
+            context.request_id,
+            context.policy_version,
+            context.agent_run_id or "",
+        )
         await self._evict_idle()
         if key in self._bundles:
             bundle, _ = self._bundles.pop(key)
             self._bundles[key] = (bundle, time.monotonic())
             return bundle
-        key_lock = await self._acquire_key_lock(key)
-        try:
-            if self._closed:
-                raise RuntimeError("Agent runtime is closed")
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
             if key not in self._bundles:
                 from datamind.agent import build_datamind_agents
                 from datamind.core.context import RequestContext as DataMindRequestContext
                 command = os.environ.get("DATAMIND_DATAPLANE_COMMAND", sys.executable)
                 args = tuple(filter(None, os.environ.get(
                     "DATAMIND_DATAPLANE_ARGS", "-m datamind_dataplane.stdio_server").split()))
-                # One physical DataPlane MCP process is shared by both logical
-                # roles. Scoped clients only change the delegated token; they
-                # must not create a second server process.
-                transport = McpClient(command, args)
-                retrieve_client = transport.scoped(lambda: issue_service_token(
+                retrieve_client = McpClient(command, args, token_factory=lambda: issue_service_token(
                     context, role="retrieve", scope="datamind.dataplane.read"))
-                store_client = transport.scoped(lambda: issue_service_token(
+                store_client = McpClient(command, args, token_factory=lambda: issue_service_token(
                     context, role="store", scope=self._store_scope.get()))
                 provider = McpToolProvider(retrieve_client, store_client=store_client, context=context.model_dump())
                 settings = _settings()
@@ -76,51 +72,26 @@ class AgentRuntime:
                 # DataMind's agent builder uses its in-process context type;
                 # the provider keeps the enterprise contract context above
                 # for tenant/profile propagation to DataPlane.
-                agent_context = DataMindRequestContext.new(
+                agent_context = DataMindRequestContext(
+                    session_id=context.session_id,
                     profile=context.profile_id,
                     user_id=context.user_id,
+                    trace_id=context.trace_id,
+                    extra={
+                        "tenant_id": context.tenant_id,
+                        "request_id": context.request_id,
+                        "agent_run_id": context.agent_run_id,
+                    },
                 )
                 system = await build_datamind_agents(
                     settings, tool_provider=provider, context=agent_context
                 )
-                bundle = AgentBundle(system, provider)
-                if self._closed:
-                    await bundle.close()
-                    raise RuntimeError("Agent runtime is closed")
-                self._bundles[key] = (bundle, time.monotonic())
+                self._bundles[key] = (AgentBundle(system, provider), time.monotonic())
                 while len(self._bundles) > self._max_bundles:
                     _, (old, _) = self._bundles.popitem(last=False)
                     await old.close()
-        finally:
-            await self._release_key_lock(key, key_lock)
+            self._locks.pop(key, None)
         return self._bundles[key][0]
-
-    async def _acquire_key_lock(self, key: tuple[str, str, str]) -> _KeyLock:
-        # Keep a reference count so per-key locks disappear after the last
-        # constructor waiter leaves.  This prevents an unbounded tenant/profile
-        # lock dictionary while preserving single-flight construction.
-        async with self._locks_guard:
-            entry = self._locks.get(key)
-            if entry is None:
-                entry = _KeyLock(asyncio.Lock())
-                self._locks[key] = entry
-            entry.users += 1
-        try:
-            await entry.lock.acquire()
-        except BaseException:
-            async with self._locks_guard:
-                entry.users -= 1
-                if entry.users == 0 and self._locks.get(key) is entry:
-                    self._locks.pop(key, None)
-            raise
-        return entry
-
-    async def _release_key_lock(self, key: tuple[str, str, str], entry: _KeyLock) -> None:
-        entry.lock.release()
-        async with self._locks_guard:
-            entry.users -= 1
-            if entry.users == 0 and self._locks.get(key) is entry:
-                self._locks.pop(key, None)
 
     async def ingest(self, context: RequestContext, message: str, *, external: bool = False) -> Any:
         """Run the one StoreAgent with a request-scoped DataPlane delegation."""
@@ -129,28 +100,6 @@ class AgentRuntime:
         marker = self._store_scope.set(scope)
         try:
             return await bundle.system.ingest(message)
-        finally:
-            self._store_scope.reset(marker)
-
-    async def ingest_batch(
-        self,
-        context: RequestContext,
-        message: str,
-        *,
-        external: bool = False,
-        final_contract: dict[str, Any] | None = None,
-    ) -> Any:
-        """Run one multi-item request through the cached StoreAgent."""
-        bundle = await self.get(context)
-        scope = "datamind.dataplane.external_write" if external else "datamind.dataplane.write"
-        marker = self._store_scope.set(scope)
-        try:
-            method = getattr(bundle.system, "ingest_batch", None)
-            if method is None:
-                method = getattr(bundle.system.store, "store_batch", None)
-            if method is None:
-                raise RuntimeError("datamind_store_batch_unavailable: DataMind package must expose ingest_batch")
-            return await method(message, final_contract=final_contract)
         finally:
             self._store_scope.reset(marker)
 
@@ -164,13 +113,8 @@ class AgentRuntime:
             await bundle.close()
 
     async def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
         bundles = [bundle for bundle, _ in self._bundles.values()]
         self._bundles.clear()
-        async with self._locks_guard:
-            self._locks.clear()
         for bundle in bundles:
             await bundle.close()
 
@@ -178,6 +122,20 @@ class AgentRuntime:
 def _settings() -> Any:
     from datamind.config import Settings
     settings = Settings()
+    # Codex's local MCP host defaults to a 120-second tool deadline. Keep
+    # model and agent budgets below it so Gateway returns a result/error before
+    # the host drops the call and leaves an unobserved write running.
+    settings.llm.timeout_s = min(
+        settings.llm.timeout_s,
+        float(os.environ.get("DATAMIND_GATEWAY_LLM_TIMEOUT_SEC", "60")),
+    )
+    settings.llm.connect_timeout_s = min(settings.llm.connect_timeout_s, 15.0)
+    settings.agent.wall_clock_timeout_s = min(
+        settings.agent.wall_clock_timeout_s,
+        float(os.environ.get("DATAMIND_GATEWAY_AGENT_TIMEOUT_SEC", "100")),
+    )
+    settings.agent.max_turns = min(settings.agent.max_turns, 8)
+    settings.agent.max_tool_calls = min(settings.agent.max_tool_calls, 16)
     configured = os.environ.get("DATAMIND_DATA_ROOT", "").strip()
     if configured:
         root = configured

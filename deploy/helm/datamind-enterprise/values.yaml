@@ -4,6 +4,11 @@ gateway:
   resources:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: "1", memory: 1Gi}
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
 controlDatabaseSecretKey: control-database-url
 dataplaneDatabaseSecretKey: dataplane-database-url
 dataRoot: /var/lib/datamind

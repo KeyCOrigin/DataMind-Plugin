@@ -31,7 +31,6 @@ def test_dataplane_scope_boundaries():
 
 def test_store_role_accepts_external_write_scope():
     from datamind_dataplane.context import DataPlaneContext
-    from datamind_contracts import RequestContext
 
     request = RequestContext(tenant_id="tenant", profile_id="default", user_id="user")
     context = DataPlaneContext.from_claims(
@@ -44,18 +43,11 @@ def test_store_role_accepts_external_write_scope():
 
 def test_external_write_scope_cannot_pollute_memory_or_skills():
     scope = {"datamind.dataplane.external_write"}
-    for tool in ("kb_add_text", "db_import_records", "graph_upsert_triples"):
+    for tool in ("kb_add_text", "kb_ingest_document", "kb_ingest_path", "db_import_records", "graph_upsert_triples"):
         authorize(tool, scope)
     for tool in ("memory_save", "memory_forget", "skill_upsert", "kb_reindex"):
         with pytest.raises(AuthorizationError):
             authorize(tool, scope)
-
-
-def test_pdf_extraction_is_store_only_and_allowed_for_additive_external_ingest():
-    authorize("pdf_extract_text", {"datamind.dataplane.write"})
-    authorize("pdf_extract_text", {"datamind.dataplane.external_write"})
-    with pytest.raises(AuthorizationError):
-        authorize("pdf_extract_text", {"datamind.dataplane.read"})
 
 
 def test_profile_context_is_tenant_scoped():

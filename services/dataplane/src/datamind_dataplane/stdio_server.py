@@ -27,6 +27,7 @@ async def _dispatch(message: dict[str, Any]) -> dict[str, Any] | None:
 
 
 async def main() -> None:
+    from .dispatch import close_services
     while True:
         line = await asyncio.to_thread(sys.stdin.readline)
         if not line:
@@ -42,6 +43,7 @@ async def main() -> None:
                         "error": {"code": -32700, "message": str(exc)}}
             sys.stdout.write(json.dumps(response, ensure_ascii=False, separators=(",", ":")) + "\n")
             sys.stdout.flush()
+    await close_services()
 
 
 def run() -> None:

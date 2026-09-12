@@ -9,7 +9,7 @@ from typing import Any
 from datamind_contracts import ExternalBatch, ExternalItem, RequestContext
 
 from .audit import event
-from .prompts import build_store_request
+from .prompts import BATCH_FINAL_CONTRACT, build_store_batch_request, build_store_request
 from .state import GatewayState, InMemoryGatewayState
 
 
@@ -21,6 +21,7 @@ class ExternalIngestService:
         self.state = state or InMemoryGatewayState()
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._semaphore = asyncio.Semaphore(int(os.environ.get("DATAMIND_INGEST_CONCURRENCY", "4")))
+        self._batch_size = max(1, int(os.environ.get("DATAMIND_INGEST_BATCH_SIZE", "100")))
         self._item_timeout = max(1.0, float(os.environ.get("DATAMIND_INGEST_ITEM_TIMEOUT", "180")))
 
     @staticmethod
@@ -147,7 +148,167 @@ class ExternalIngestService:
         })
         return statuses
 
+    @staticmethod
+    def _decode_batch_answer(result: Any) -> dict[str, Any]:
+        if not isinstance(result, dict):
+            return {}
+        if isinstance(result.get("items"), list):
+            return result
+        answer = result.get("answer")
+        if not isinstance(answer, str):
+            return {}
+        text = answer.strip()
+        if text.startswith("```"):
+            text = text.split("```", 2)[1]
+            if text.lstrip().lower().startswith("json"):
+                text = text.lstrip()[4:]
+        try:
+            value = json.loads(text.strip())
+        except json.JSONDecodeError:
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    @classmethod
+    def _batch_item_results(cls, result: Any, items: list[ExternalItem]) -> dict[str, tuple[list[dict[str, Any]], str | None]]:
+        """Return only receipts that actually came back from DataPlane."""
+        raw = cls._decode_batch_answer(result)
+        pool = {
+            str(value.get("receipt_id")): value
+            for value in (result.get("receipts", []) if isinstance(result, dict) else [])
+            if isinstance(value, dict) and str(value.get("receipt_id") or "")
+        }
+        out: dict[str, tuple[list[dict[str, Any]], str | None]] = {}
+        for value in raw.get("items", []) if isinstance(raw.get("items"), list) else []:
+            if not isinstance(value, dict):
+                continue
+            external_id = str(value.get("external_id") or value.get("source") or "")
+            if not external_id:
+                continue
+            ids = value.get("receipt_ids") if isinstance(value.get("receipt_ids"), list) else []
+            if not ids and isinstance(value.get("receipts"), list):
+                ids = [item.get("receipt_id") for item in value["receipts"] if isinstance(item, dict)]
+            receipts = [pool[str(receipt_id)] for receipt_id in ids if str(receipt_id) in pool]
+            receipt_failed = any(
+                receipt.get("status") == "failed"
+                or any(isinstance(entry, dict) and entry.get("status") == "failed"
+                       for entry in (receipt.get("results") or []))
+                for receipt in receipts
+            )
+            good = value.get("status") == "completed" and bool(receipts) and not receipt_failed
+            out[external_id] = (receipts, None if good else str(value.get("error") or "store_agent_batch_item_failed"))
+        return out
+
     async def _run(self, job_id: str, batch: ExternalBatch, context: RequestContext, source_key: str) -> None:
+        """Process all pending records in one StoreAgent session."""
+        if not hasattr(self.runtime, "ingest_batch"):
+            # Kept only for test doubles and old embedders. The production
+            # AgentRuntime always exposes ingest_batch and never enters this
+            # compatibility path.
+            await self._run_legacy(job_id, batch, context, source_key)
+            return
+        await self.state.reserve_events(tenant_id=context.tenant_id, profile_id=context.profile_id,
+                                        source_key=source_key, events=[self._event(item) for item in batch.items])
+        await self.state.update_job(job_id, {"status": "running", "error": None})
+        errors: list[dict[str, str]] = []
+        pending: list[ExternalItem] = []
+        for item in batch.items:
+            status = await self.state.get_event_statuses(
+                tenant_id=context.tenant_id, profile_id=context.profile_id,
+                source_key=source_key, events=[self._event(item)],
+            )
+            if status.get(self._key(item)) == "committed":
+                continue
+            pending.append(item)
+            await self.state.mark_events_status(
+                tenant_id=context.tenant_id, profile_id=context.profile_id,
+                source_key=source_key, events=[self._event(item)], status="processing",
+            )
+        try:
+            async with self._semaphore:
+                for offset in range(0, len(pending), self._batch_size):
+                    agent_batch = pending[offset:offset + self._batch_size]
+                    try:
+                        payload = [{
+                            "source": item.external_id,
+                            "external_id": item.external_id,
+                            "text": item.text,
+                            "kind": "table" if item.structured else "text",
+                            "metadata": {
+                                "source_key": source_key,
+                                "event_type": item.event_type,
+                                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+                                "structured": item.structured,
+                                "metadata": item.metadata,
+                            },
+                        } for item in agent_batch]
+                        operation = self.runtime.ingest_batch(
+                            context,
+                            build_store_batch_request(payload, external=True),
+                            external=True,
+                            final_contract=BATCH_FINAL_CONTRACT,
+                        )
+                        result = await asyncio.wait_for(
+                            operation, timeout=self._item_timeout * max(1, len(agent_batch)),
+                        )
+                        outcomes = self._batch_item_results(result, agent_batch)
+                        for item in agent_batch:
+                            receipts, error = outcomes.get(
+                                item.external_id, ([], "store_agent_batch_missing_item_result"),
+                            )
+                            event_data = self._event(item)
+                            if error or not receipts:
+                                errors.append({"external_id": item.external_id, "error": error or "store_agent_no_receipts"})
+                                await self.state.mark_events_status(
+                                    tenant_id=context.tenant_id, profile_id=context.profile_id,
+                                    source_key=source_key, events=[event_data], status="failed",
+                                )
+                                continue
+                            for receipt in receipts:
+                                receipt.setdefault("external_id", item.external_id)
+                            await self.state.add_receipts(job_id, receipts)
+                            await self.state.mark_events_status(
+                                tenant_id=context.tenant_id, profile_id=context.profile_id,
+                                source_key=source_key, events=[event_data], status="committed",
+                            )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        message = f"{type(exc).__name__}: {exc}"
+                        for item in agent_batch:
+                            errors.append({"external_id": item.external_id, "error": message})
+                            await self.state.mark_events_status(
+                                tenant_id=context.tenant_id, profile_id=context.profile_id,
+                                source_key=source_key, events=[self._event(item)], status="failed",
+                            )
+                    await self._progress(job_id, batch, context, source_key, errors=errors)
+            statuses = await self._progress(job_id, batch, context, source_key, errors=errors)
+            if any(status != "committed" for status in statuses.values()):
+                await self.state.update_job(job_id, {"status": "partial", "checkpoint_committed": False,
+                                                     "error": errors[-1]["error"] if errors else "batch_item_failed"})
+                return
+            committed = await self.state.commit_checkpoint(
+                tenant_id=context.tenant_id, profile_id=context.profile_id,
+                source_key=source_key, checkpoint=batch.checkpoint.after,
+                expected_version=batch.checkpoint.expected_version,
+            )
+            if not committed:
+                await self.state.update_job(job_id, {"status": "failed", "error": "checkpoint_conflict",
+                                                     "checkpoint_committed": False})
+                return
+            await self.state.update_job(job_id, {"status": "completed", "checkpoint_committed": True})
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            for item in pending:
+                await self.state.mark_events_status(
+                    tenant_id=context.tenant_id, profile_id=context.profile_id,
+                    source_key=source_key, events=[self._event(item)], status="failed",
+                )
+            await self.state.update_job(job_id, {"status": "partial", "checkpoint_committed": False,
+                                                 "error": f"{type(exc).__name__}: {exc}",
+                                                 "failed_details": errors})
+
+    async def _run_legacy(self, job_id: str, batch: ExternalBatch, context: RequestContext, source_key: str) -> None:
         await self.state.reserve_events(tenant_id=context.tenant_id, profile_id=context.profile_id,
                                         source_key=source_key, events=[self._event(item) for item in batch.items])
         await self.state.update_job(job_id, {"status": "running", "error": None})

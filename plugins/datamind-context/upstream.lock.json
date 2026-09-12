@@ -3,7 +3,7 @@
   "commit": "enterprise-provider-patch-local",
   "package_version": "0.3.2",
   "wheel": "datamind-0.3.2-py3-none-any.whl",
-  "sha256": "36142e0165f1add4c372b8de7f4bb9d4eb739718e1e1c2db84a46cdca89707b1",
-  "build_provenance": "local DataMind source with build_datamind_agents AgentToolProvider seam",
+  "sha256": "eb537b605503000704c4be8e4a33e27c50892ad99b7aecdbb062ab534286c698",
+  "build_provenance": "local DataMind source with build_datamind_agents AgentToolProvider seam and StoreAgent batch entrypoint",
   "source_url": "https://github.com/OpenDCAI/DataMind"
 }

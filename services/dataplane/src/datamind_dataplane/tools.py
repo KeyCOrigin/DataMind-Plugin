@@ -14,7 +14,15 @@ def catalog(registry: ToolRegistry, scopes: set[str] | None = None) -> list[dict
             except Exception:
                 continue
         spec = registry.get(name)
-        result.append({"name": name, "description": spec.description,
-                       "inputSchema": spec.input_schema,
-                       "annotations": {"readOnlyHint": spec.access.value == "read"}})
+        result.append({
+            "name": name,
+            "description": spec.description,
+            "inputSchema": spec.input_schema,
+            "access": spec.access.value,
+            "surface": spec.surface.value if spec.surface else None,
+            "annotations": {
+                "readOnlyHint": spec.access.value in {"read", "utility"},
+                "access": spec.access.value,
+            },
+        })
     return result

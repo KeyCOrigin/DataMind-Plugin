@@ -1,4 +1,4 @@
-from .client import McpClient
+from .client import McpClient, ScopedMcpClient
 from .registry import McpToolProvider
 
-__all__ = ["McpClient", "McpToolProvider"]
+__all__ = ["McpClient", "ScopedMcpClient", "McpToolProvider"]

@@ -12,12 +12,17 @@ from typing import Any
 from .authorization import authorize
 from .context import DataPlaneContext, validate_context
 from .receipts import receipt
-from .services import DataPlaneServices
+from .services import DataPlaneServiceFactory
 from .tools import catalog
 from .guards import guard_args
 
 
-_services: dict[tuple[str, str], DataPlaneServices] = {}
+_services = DataPlaneServiceFactory()
+
+
+async def close_services() -> None:
+    """Close the process-local DataPlane service factory."""
+    await _services.aclose()
 
 
 def _verify_token(value: str | None) -> dict[str, Any]:
@@ -63,7 +68,7 @@ async def dispatch(message: dict[str, Any], *, authorization: str | None) -> dic
         elif method == "tools/list":
             tenant = str(claims.get("tenant_id") or "")
             profile = str(claims.get("profile") or "default")
-            services = _services.setdefault((tenant, profile), DataPlaneServices(tenant, profile))
+            services = await _services.get(tenant, profile)
             scopes = frozenset(str(claims.get("scope") or "").split())
             result = {"tools": catalog(services.registry, set(scopes))}
         elif method == "tools/call":
@@ -73,10 +78,7 @@ async def dispatch(message: dict[str, Any], *, authorization: str | None) -> dic
             context = validate_context(arguments.pop("_context", {}))
             dp = DataPlaneContext.from_claims(claims, context)
             authorize(name, set(dp.scopes))
-            services = _services.setdefault(
-                (context.tenant_id, context.profile_id),
-                DataPlaneServices(context.tenant_id, context.profile_id),
-            )
+            services = await _services.get(context.tenant_id, context.profile_id)
             from .services import data_root
 
             root = data_root() / "tenants" / context.tenant_id / "data" / "profiles" / context.profile_id
@@ -95,8 +97,10 @@ async def dispatch(message: dict[str, Any], *, authorization: str | None) -> dic
             }
             if name in {
                 "kb_add_text", "kb_add_file", "kb_add_path", "kb_reindex",
+                "kb_ingest_document", "kb_ingest_path",
                 "db_import_records", "db_import_csv", "graph_upsert_triples",
                 "graph_add_triples_from_text", "memory_save", "memory_forget", "skill_upsert",
+                "memory_record_interaction", "memory_record_feedback", "wiki_upsert_source",
             }:
                 result["structuredContent"] = receipt(name, context.model_dump(), value)
         else:

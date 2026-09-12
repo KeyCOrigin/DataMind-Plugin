@@ -28,7 +28,7 @@ RetrieveAgent 和 StoreAgent 仍然由 DataMind 主仓库构建，本仓库负�
 | 使用者 | Codex、ChatGPT、Claude 等 MCP 宿主 | DataMind 的 RetrieveAgent、StoreAgent |
 | 通信方式 | 本地 stdio，由 Codex 启动 `datamind-mcp` | 本地 stdio，由 Gateway 启动 DataPlane 子进程 |
 | 主要职责 | 用户认证、租户和 profile、Agent 生命周期、外部入库任务、审计和回执 | KB、数据库、Graph、Memory、Skills 服务及底层存储 |
-| 工具范围 | `datamind_agent_*`、外部入库、任务状态、profile 查询 | `kb_*`、`db_*`、`graph_*`、`memory_*`、`skill_*` |
+| 工具范围 | `datamind_agent_*`、外部入库、任务状态、profile 查询 | `kb_*`、`db_*`、`graph_*`、`memory_*`、`skill_*`、`utility_*` |
 | 数据库访问 | 不直接访问 DataMind 数据库 | 独占 DataMind 数据存储凭据 |
 | 是否运行 LLM Agent | Gateway 内运行 DataMind Agent Runtime | 不运行 LLM Agent |
 
@@ -69,11 +69,24 @@ tests/                          合同与安全测试
 scripts/                        校验与冒烟测试
 ```
 
+## 工厂与生命周期
+
+DataPlane 使用 `DataPlaneServiceFactory` 按 `tenant_id + profile_id` 缓存一套服务图。
+并发首次请求由同一把异步锁串行构造，命中缓存时不会重新创建 KB、DB、Graph、Memory、
+Skills 或 Embedding。进程退出时工厂统一关闭数据库、向量库、图存储和模型客户端。
+
+Gateway 的 `AgentRuntime` 使用 DataMind 主仓库的 `build_datamind_agents()` 构建两个
+逻辑 Agent，并注入 `McpToolProvider`。RetrieveAgent 和 StoreAgent 通过两个逻辑的
+scope 客户端共享一个物理 DataPlane stdio 进程；关闭 Provider 时底层进程只关闭一次。
+DataPlane 的 MCP 工具目录声明 `access` 和 `surface` 元数据，Provider 按访问级别筛选，
+新增工具不需要同步修改一份工具名称白名单。
+
 ## Gateway 对外工具
 
 ```text
 datamind_agent_retrieve
 datamind_agent_store
+datamind_agent_store_batch
 datamind_agent_status
 datamind_external_source_status
 datamind_external_ingest_submit
@@ -84,6 +97,36 @@ datamind_profile_status
 ```
 
 插件配置中不会暴露 `kb_*`、`db_*`、`graph_*`、`memory_*` 或 `skill_*`。
+
+DataPlane 还提供租户/profile 范围内的体验层能力，供内部 Agent 使用：
+
+```text
+kb_ingest_document       文档抽取并入库
+kb_ingest_path            目录批量抽取并入库
+wiki_upsert_source        写入来源 Wiki 页面
+wiki_search / wiki_status 搜索和检查 Wiki
+memory_record_interaction 记录会话事件
+memory_record_feedback    将用户纠错写入长期记忆
+utility_calculate         安全计算受限数学表达式
+utility_current_time      获取 UTC、本地或指定 IANA 时区的当前时间
+```
+
+Wiki、交互记录和反馈都写入当前 DataPlane profile 目录，并复用已有的
+MemoryService，不会在 Gateway 侧新增一套 SQLite 记忆库。
+
+`utility_calculate` 和 `utility_current_time` 是 DataPlane 内部的无副作用实用工具。
+它们只进入 RetrieveAgent 的读工具目录，StoreAgent、外部写入 scope 和任何写入回执
+都不会包含这两个工具。计算器使用安全 AST 白名单，只允许基础算术、有限数学函数
+和常量，禁止属性访问、导入、任意函数和 Python 代码执行。
+
+StoreAgent 现在支持在 DataPlane 内统一处理文件入库：
+
+- `kb_ingest_document`：抽取并入库单个 TXT、Markdown、CSV、TSV、DOCX、XLSX 或 PDF；
+- `kb_ingest_path`：递归处理目录，逐文件返回抽取方法、字符数和错误；
+- PDF 默认使用文本抽取，扫描版 PDF 必须显式启用 OCR；
+- 表格按完整内容抽取，不使用固定的前 500 行截断。
+
+这些是 DataPlane 内部工具，Codex 仍然只看到 `datamind_agent_*` 公共入口。
 
 ## 鉴权与隔离
 
@@ -126,15 +169,35 @@ embeddingApiKeySecretKey: embedding-api-key
 
 ## 外部入库流程
 
-`datamind_external_ingest_submit` 是可选的批量编排入口，不是另一种入库 Agent。
-它只负责校验 `ExternalBatch`、过滤敏感字段、计算内容哈希、幂等检查、分块进度、
-回执和 checkpoint。每个分块都调用与 `datamind_agent_store` 相同的 StoreAgent，
-StoreAgent 根据来源、接口和格式自主选择实际写工具；Gateway 不替它决定写 KB、DB
-还是 Graph。
+`datamind_agent_store_batch` 是真正的批量 StoreAgent 入口：一次 MCP 调用创建一次
+StoreAgent 会话，传入多个独立 `items`。StoreAgent 仍根据每项来源、接口和格式自主
+选择 KB、DB 或 Graph；Gateway 只把实际回执按 source 对齐，不替它决定目标。
 
-少量数据可以直接循环调用 `datamind_agent_store`，完全不需要批量入口。需要大批量、
+`datamind_external_ingest_submit` 是可选的异步编排入口，不是另一种入库 Agent。
+它负责校验 `ExternalBatch`、计算内容哈希、幂等检查、进度、回执和 checkpoint，
+然后把当前未提交的所有项一次交给 `datamind_agent_store_batch`。每项独立落账，
+只有全部项都有真实回执时才提交 checkpoint。
+
+少量数据可以直接调用 `datamind_agent_store`。多个数据项必须调用
+`datamind_agent_store_batch`，不要在客户端循环调用单条工具。需要大批量、
 失败重试或断点续跑时才使用 `datamind_external_ingest_submit`。批量入口不会把
 全部数据一次性塞进 Agent 上下文，默认按 `DATAMIND_INGEST_BATCH_SIZE` 分块。
+
+批量工具的最小请求形态：
+
+```json
+{
+  "items": [
+    {"source": "mail-001", "text": "邮件正文", "kind": "text"},
+    {"source": "records-001", "text": "列A,列B\n1,2", "kind": "table"}
+  ],
+  "confirm": true,
+  "source_trust": "external"
+}
+```
+
+返回结果会逐项列出 `status`、`receipts` 和错误；没有真实 `receipt_id` 的项不会
+被标记为完成。
 
 重复批次不会产生新增写入；checkpoint 冲突返回 `checkpoint_conflict`，不会
 推进游标。
